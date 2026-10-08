@@ -13,31 +13,39 @@ const testCert = makeTestCertificate();
 const certificate = loadCertificate(testCert.pfx, testCert.password);
 const signer = new NodeSigner();
 
-describe.each<SignatureProfile>(['rsa-sha1-c14n', 'rsa-sha256-exc-c14n'])('NodeSigner %s', (profile) => {
-  test('signs infDPS and the signature verifies', async () => {
-    const signed = await signer.sign({ xml, elementName: 'infDPS', certificate, profile });
-    expect(verifyXmlSignature(signed, certificate.certificatePem)).toBe(true);
-  });
+describe.each<SignatureProfile>(['rsa-sha1-c14n', 'rsa-sha256-exc-c14n'])(
+  'NodeSigner %s',
+  (profile) => {
+    test('signs infDPS and the signature verifies', async () => {
+      const signed = await signer.sign({ xml, elementName: 'infDPS', certificate, profile });
+      expect(verifyXmlSignature(signed, certificate.certificatePem)).toBe(true);
+    });
 
-  test('places Signature as the last child of DPS, referencing the Id', async () => {
-    const signed = await signer.sign({ xml, elementName: 'infDPS', certificate, profile });
-    expect(signed).toContain(`<Reference URI="#${ID}"`);
-    expect(signed).toMatch(
-      /<\/infDPS><Signature xmlns="http:\/\/www\.w3\.org\/2000\/09\/xmldsig#">[\s\S]*<\/Signature><\/DPS>$/,
-    );
-    expect(signed).toContain('<X509Certificate>');
-  });
+    test('places Signature as the last child of DPS, referencing the Id', async () => {
+      const signed = await signer.sign({ xml, elementName: 'infDPS', certificate, profile });
+      expect(signed).toContain(`<Reference URI="#${ID}"`);
+      expect(signed).toMatch(
+        /<\/infDPS><Signature xmlns="http:\/\/www\.w3\.org\/2000\/09\/xmldsig#">[\s\S]*<\/Signature><\/DPS>$/,
+      );
+      expect(signed).toContain('<X509Certificate>');
+    });
 
-  test('keeps accented text intact', async () => {
-    const signed = await signer.sign({ xml, elementName: 'infDPS', certificate, profile });
-    expect(signed).toContain('análise &amp; ção &lt;teste&gt;');
-  });
+    test('keeps accented text intact', async () => {
+      const signed = await signer.sign({ xml, elementName: 'infDPS', certificate, profile });
+      expect(signed).toContain('análise &amp; ção &lt;teste&gt;');
+    });
 
-  test('a tampered document fails verification', async () => {
-    const signed = await signer.sign({ xml, elementName: 'infDPS', certificate, profile });
-    expect(verifyXmlSignature(signed.replace('Consultoria', 'Consultorio'), certificate.certificatePem)).toBe(false);
-  });
-});
+    test('a tampered document fails verification', async () => {
+      const signed = await signer.sign({ xml, elementName: 'infDPS', certificate, profile });
+      expect(
+        verifyXmlSignature(
+          signed.replace('Consultoria', 'Consultorio'),
+          certificate.certificatePem,
+        ),
+      ).toBe(false);
+    });
+  },
+);
 
 test('rejects an element name that is not a plain XML name', async () => {
   await expect(

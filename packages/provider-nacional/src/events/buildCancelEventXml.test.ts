@@ -15,7 +15,9 @@ const base: CancelEventInput = {
 };
 
 test('builds a pedRegEvento that validates against the XSD', () => {
-  expect(validateAgainstXsd(buildCancelEventXml(base).xml, 'pedRegEvento_v1.01.xsd').errors).toEqual([]);
+  expect(
+    validateAgainstXsd(buildCancelEventXml(base).xml, 'pedRegEvento_v1.01.xsd').errors,
+  ).toEqual([]);
 });
 
 test('uses the PRE + key + 101101 id', () => {
@@ -27,14 +29,22 @@ test('uses the PRE + key + 101101 id', () => {
 
 test('accepts an access key with an alphanumeric CNPJ', () => {
   const key = `35503081` + `2AB345678000195` + '0'.repeat(27);
-  expect(validateAgainstXsd(buildCancelEventXml({ ...base, accessKey: key }).xml, 'pedRegEvento_v1.01.xsd').errors).toEqual([]);
+  expect(
+    validateAgainstXsd(
+      buildCancelEventXml({ ...base, accessKey: key }).xml,
+      'pedRegEvento_v1.01.xsd',
+    ).errors,
+  ).toEqual([]);
 });
 
 test.each([
   ['a short justification', { justification: 'curto demais' }],
   ['a long justification', { justification: 'x'.repeat(256) }],
   ['a bad access key', { accessKey: '123' }],
-  ['an access key with letters outside the CNPJ', { accessKey: `355030AB345678000195${'0'.repeat(30)}` }],
+  [
+    'an access key with letters outside the CNPJ',
+    { accessKey: `355030AB345678000195${'0'.repeat(30)}` },
+  ],
 ])('rejects %s', (_label, override) => {
   expect(() => buildCancelEventXml({ ...base, ...override })).toThrow(RangeError);
 });

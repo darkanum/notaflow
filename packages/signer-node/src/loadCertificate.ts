@@ -11,7 +11,11 @@ const CERT_BAG = '1.2.840.113549.1.12.10.1.3';
 // ICP-Brasil e-CNPJ certificates put "COMPANY NAME:CNPJ" in the CN.
 const CN_CNPJ = /:([0-9A-Z]{14})$/;
 
-export function loadCertificate(pfx: Buffer, password: string, now = new Date()): CertificateMaterial {
+export function loadCertificate(
+  pfx: Buffer,
+  password: string,
+  now = new Date(),
+): CertificateMaterial {
   const p12 = openPkcs12(pfx, password);
 
   const keyBags = [
@@ -19,14 +23,18 @@ export function loadCertificate(pfx: Buffer, password: string, now = new Date())
     ...(p12.getBags({ bagType: KEY_BAG })[KEY_BAG] ?? []),
   ];
   const key = keyBags.find((bag) => bag.key)?.key as forge.pki.rsa.PrivateKey | undefined;
-  if (!key) throw new CertificateError('NO_PRIVATE_KEY', 'The certificate file has no private key.');
+  if (!key)
+    throw new CertificateError('NO_PRIVATE_KEY', 'The certificate file has no private key.');
 
   // The file can carry the CA chain; pick the certificate that matches the key.
   const cert = (p12.getBags({ bagType: CERT_BAG })[CERT_BAG] ?? [])
     .map((bag) => bag.cert)
     .find((c) => c && (c.publicKey as forge.pki.rsa.PublicKey).n.equals(key.n));
   if (!cert) {
-    throw new CertificateError('NO_MATCHING_CERTIFICATE', 'No certificate matches the private key.');
+    throw new CertificateError(
+      'NO_MATCHING_CERTIFICATE',
+      'No certificate matches the private key.',
+    );
   }
 
   const subject = cert.subject.attributes
@@ -38,7 +46,10 @@ export function loadCertificate(pfx: Buffer, password: string, now = new Date())
 
   const { notBefore, notAfter } = cert.validity;
   if (now < notBefore) {
-    throw new CertificateError('NOT_YET_VALID', `The certificate is valid from ${notBefore.toISOString()}.`);
+    throw new CertificateError(
+      'NOT_YET_VALID',
+      `The certificate is valid from ${notBefore.toISOString()}.`,
+    );
   }
   if (now > notAfter) {
     throw new CertificateError('EXPIRED', `The certificate expired on ${notAfter.toISOString()}.`);
@@ -62,7 +73,10 @@ function openPkcs12(pfx: Buffer, password: string): forge.pkcs12.Pkcs12Pfx {
   try {
     asn1 = forge.asn1.fromDer(forge.util.createBuffer(pfx.toString('binary')));
   } catch {
-    throw new CertificateError('INVALID_FILE', 'The file is not a valid PKCS#12 (.pfx) certificate.');
+    throw new CertificateError(
+      'INVALID_FILE',
+      'The file is not a valid PKCS#12 (.pfx) certificate.',
+    );
   }
   try {
     return forge.pkcs12.pkcs12FromAsn1(asn1, password);
@@ -71,6 +85,9 @@ function openPkcs12(pfx: Buffer, password: string): forge.pkcs12.Pkcs12Pfx {
     if (/MAC could not be verified|Invalid password/i.test(message)) {
       throw new CertificateError('WRONG_PASSWORD', 'The certificate password is wrong.');
     }
-    throw new CertificateError('INVALID_FILE', 'The file is not a valid PKCS#12 (.pfx) certificate.');
+    throw new CertificateError(
+      'INVALID_FILE',
+      'The file is not a valid PKCS#12 (.pfx) certificate.',
+    );
   }
 }

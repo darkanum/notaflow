@@ -14,12 +14,23 @@ const base: DpsInput = {
   number: 1,
   competence: '2026-10-01',
   emitterMunicipality: '3550308',
-  provider: { cnpj: '12345678000195', municipalRegistration: '1234567', simplesNacional: '1', specialRegime: '0' },
+  provider: {
+    cnpj: '12345678000195',
+    municipalRegistration: '1234567',
+    simplesNacional: '1',
+    specialRegime: '0',
+  },
   customer: {
     document: { type: 'CNPJ', value: '98765432000110' },
     name: 'Cliente Exemplo Ltda',
     email: 'financeiro@example.com',
-    address: { municipality: '3550308', zip: '01310100', street: 'Av. Paulista', number: '1000', district: 'Bela Vista' },
+    address: {
+      municipality: '3550308',
+      zip: '01310100',
+      street: 'Av. Paulista',
+      number: '1000',
+      district: 'Bela Vista',
+    },
   },
   service: {
     municipality: '3550308',
@@ -33,17 +44,26 @@ const base: DpsInput = {
 
 describe('buildDpsId', () => {
   test('builds the 45-character id', () => {
-    const id = buildDpsId({ municipality: '3550308', cnpj: '12345678000195', series: '900', number: 1 });
+    const id = buildDpsId({
+      municipality: '3550308',
+      cnpj: '12345678000195',
+      series: '900',
+      number: 1,
+    });
     expect(id).toBe('DPS355030821234567800019500900000000000000001');
     expect(id).toHaveLength(45);
   });
 
   test('accepts an alphanumeric CNPJ', () => {
-    expect(buildDpsId({ municipality: '3550308', cnpj: 'AB345678000195', series: '1', number: 7 })).toHaveLength(45);
+    expect(
+      buildDpsId({ municipality: '3550308', cnpj: 'AB345678000195', series: '1', number: 7 }),
+    ).toHaveLength(45);
   });
 
   test('rejects a municipality that is not 7 digits', () => {
-    expect(() => buildDpsId({ municipality: '355', cnpj: '12345678000195', series: '1', number: 1 })).toThrow(RangeError);
+    expect(() =>
+      buildDpsId({ municipality: '355', cnpj: '12345678000195', series: '1', number: 1 }),
+    ).toThrow(RangeError);
   });
 });
 
@@ -65,7 +85,9 @@ describe('buildDpsXml', () => {
 
   test('writes the fields the Sefin reads first', () => {
     const { id, xml } = buildDpsXml(base);
-    expect(id).toBe(buildDpsId({ municipality: '3550308', cnpj: '12345678000195', series: '900', number: 1 }));
+    expect(id).toBe(
+      buildDpsId({ municipality: '3550308', cnpj: '12345678000195', series: '900', number: 1 }),
+    );
     expect(xml).toContain(`<infDPS Id="${id}">`);
     expect(xml).toContain('<tpAmb>2</tpAmb>');
     expect(xml).toContain('<dhEmi>2026-10-08T15:00:00-03:00</dhEmi>');

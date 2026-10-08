@@ -18,7 +18,11 @@ let client: NacionalClient;
 beforeEach(() => {
   agent = new MockAgent();
   agent.disableNetConnect();
-  client = new NacionalClient({ environment: 'producao_restrita', dispatcher: agent, timeoutMs: 200 });
+  client = new NacionalClient({
+    environment: 'producao_restrita',
+    dispatcher: agent,
+    timeoutMs: 200,
+  });
 });
 
 test('gzipBase64 round-trips accented XML', () => {
@@ -28,17 +32,22 @@ test('gzipBase64 round-trips accented XML', () => {
 
 test('createMtlsDispatcher builds an Agent from PEM material', () => {
   const testCert = makeTestCertificate();
-  expect(createMtlsDispatcher(loadCertificate(testCert.pfx, testCert.password))).toBeInstanceOf(Agent);
+  expect(createMtlsDispatcher(loadCertificate(testCert.pfx, testCert.password))).toBeInstanceOf(
+    Agent,
+  );
 });
 
 describe('issue', () => {
   test('201 returns issued with the decompressed NFS-e', async () => {
-    agent.get(SEFIN).intercept({ path: '/SefinNacional/nfse', method: 'POST' }).reply(201, {
-      idDps: DPS_ID,
-      chaveAcesso: KEY,
-      nfseXmlGZipB64: gzipBase64('<NFSe/>'),
-      alertas: [],
-    });
+    agent
+      .get(SEFIN)
+      .intercept({ path: '/SefinNacional/nfse', method: 'POST' })
+      .reply(201, {
+        idDps: DPS_ID,
+        chaveAcesso: KEY,
+        nfseXmlGZipB64: gzipBase64('<NFSe/>'),
+        alertas: [],
+      });
     expect(await client.issue('<DPS/>')).toEqual({
       kind: 'issued',
       accessKey: KEY,
@@ -62,7 +71,9 @@ describe('issue', () => {
       })
       .reply(201, { idDps: DPS_ID, chaveAcesso: KEY, nfseXmlGZipB64: gzipBase64('<NFSe/>') });
     await client.issue('<DPS>ç</DPS>');
-    expect(gunzipBase64((JSON.parse(body) as { dpsXmlGZipB64: string }).dpsXmlGZipB64)).toBe('<DPS>ç</DPS>');
+    expect(gunzipBase64((JSON.parse(body) as { dpsXmlGZipB64: string }).dpsXmlGZipB64)).toBe(
+      '<DPS>ç</DPS>',
+    );
   });
 
   test('400 returns rejected with the Sefin errors', async () => {
@@ -107,7 +118,10 @@ describe('findByDpsId', () => {
   });
 
   test('404 returns not_found', async () => {
-    agent.get(SEFIN).intercept({ path: `/SefinNacional/dps/${DPS_ID}`, method: 'GET' }).reply(404, {});
+    agent
+      .get(SEFIN)
+      .intercept({ path: `/SefinNacional/dps/${DPS_ID}`, method: 'GET' })
+      .reply(404, {});
     expect(await client.findByDpsId(DPS_ID)).toEqual({ kind: 'not_found' });
   });
 });
@@ -118,7 +132,10 @@ describe('registerEvent', () => {
       .get(SEFIN)
       .intercept({ path: `/SefinNacional/nfse/${KEY}/eventos`, method: 'POST' })
       .reply(201, { eventoXmlGZipB64: gzipBase64('<evento/>') });
-    expect(await client.registerEvent(KEY, '<pedRegEvento/>')).toEqual({ kind: 'registered', eventXml: '<evento/>' });
+    expect(await client.registerEvent(KEY, '<pedRegEvento/>')).toEqual({
+      kind: 'registered',
+      eventXml: '<evento/>',
+    });
   });
 
   test('400 returns rejected with the single erro object', async () => {
@@ -171,7 +188,10 @@ describe('fetchDfe', () => {
   });
 
   test('429 throws a retryable error', async () => {
-    agent.get(ADN).intercept({ path: DFE_PATH(0), method: 'GET' }).reply(429, {});
+    agent
+      .get(ADN)
+      .intercept({ path: DFE_PATH(0), method: 'GET' })
+      .reply(429, {});
     await expect(client.fetchDfe(0, '12345678000195')).rejects.toMatchObject({ retryable: true });
   });
 });

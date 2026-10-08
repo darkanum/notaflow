@@ -16,7 +16,8 @@ export type IssueResult =
 
 export type DpsLookup = { kind: 'found'; accessKey: string } | { kind: 'not_found' };
 
-export type EventResult = { kind: 'registered'; eventXml: string } | { kind: 'rejected'; error: SefinError };
+export type EventResult =
+  { kind: 'registered'; eventXml: string } | { kind: 'rejected'; error: SefinError };
 
 export interface DfeDocument {
   nsu: number;
@@ -73,7 +74,9 @@ export class NacionalClient {
   async issue(signedDpsXml: string): Promise<IssueResult> {
     let response: { status: number; body: unknown };
     try {
-      response = await this.call('POST', `${this.urls.sefin}/nfse`, { dpsXmlGZipB64: gzipBase64(signedDpsXml) });
+      response = await this.call('POST', `${this.urls.sefin}/nfse`, {
+        dpsXmlGZipB64: gzipBase64(signedDpsXml),
+      });
     } catch (error) {
       return { kind: 'uncertain', reason: error instanceof Error ? error.message : String(error) };
     }
@@ -103,14 +106,20 @@ export class NacionalClient {
   }
 
   async findByDpsId(dpsId: string): Promise<DpsLookup> {
-    const { status, body } = await this.call('GET', `${this.urls.sefin}/dps/${encodeURIComponent(dpsId)}`);
+    const { status, body } = await this.call(
+      'GET',
+      `${this.urls.sefin}/dps/${encodeURIComponent(dpsId)}`,
+    );
     if (status === 200) return { kind: 'found', accessKey: String((body as Json).chaveAcesso) };
     if (status === 404) return { kind: 'not_found' };
     throw httpError(status, body);
   }
 
   async getNfse(accessKey: string): Promise<string> {
-    const { status, body } = await this.call('GET', `${this.urls.sefin}/nfse/${encodeURIComponent(accessKey)}`);
+    const { status, body } = await this.call(
+      'GET',
+      `${this.urls.sefin}/nfse/${encodeURIComponent(accessKey)}`,
+    );
     if (status !== 200) throw httpError(status, body);
     return gunzipBase64(String((body as Json).nfseXmlGZipB64));
   }
@@ -121,8 +130,10 @@ export class NacionalClient {
       pedidoRegistroEventoXmlGZipB64: gzipBase64(signedEventXml),
     });
     const data = (body ?? {}) as Json;
-    if (status === 201) return { kind: 'registered', eventXml: gunzipBase64(String(data.eventoXmlGZipB64)) };
-    if (status === 400 || status === 401) return { kind: 'rejected', error: data.erro as SefinError };
+    if (status === 201)
+      return { kind: 'registered', eventXml: gunzipBase64(String(data.eventoXmlGZipB64)) };
+    if (status === 400 || status === 401)
+      return { kind: 'rejected', error: data.erro as SefinError };
     throw httpError(status, body);
   }
 
@@ -130,7 +141,11 @@ export class NacionalClient {
     const url = `${this.urls.adn}/contribuintes/DFe/${nsu}?cnpjConsulta=${encodeURIComponent(cnpj)}&lote=true`;
     const { status, body } = await this.call('GET', url);
     // The ADN answers 400 and 404 with a full batch body, so read the body before the status.
-    const data = body as { StatusProcessamento?: DfeBatch['status']; LoteDFe?: RawDfeItem[]; Erros?: unknown[] } | null;
+    const data = body as {
+      StatusProcessamento?: DfeBatch['status'];
+      LoteDFe?: RawDfeItem[];
+      Erros?: unknown[];
+    } | null;
     if (data?.StatusProcessamento && (status === 200 || status === 400 || status === 404)) {
       return {
         status: data.StatusProcessamento,
@@ -155,12 +170,19 @@ export class NacionalClient {
     return body;
   }
 
-  private async call(method: 'GET' | 'POST', url: string, json?: unknown): Promise<{ status: number; body: unknown }> {
+  private async call(
+    method: 'GET' | 'POST',
+    url: string,
+    json?: unknown,
+  ): Promise<{ status: number; body: unknown }> {
     const response = await request(url, {
       method,
       dispatcher: this.dispatcher,
       signal: AbortSignal.timeout(this.timeoutMs),
-      headers: { accept: 'application/json', ...(json ? { 'content-type': 'application/json' } : {}) },
+      headers: {
+        accept: 'application/json',
+        ...(json ? { 'content-type': 'application/json' } : {}),
+      },
       ...(json ? { body: JSON.stringify(json) } : {}),
     });
     const text = await response.body.text();

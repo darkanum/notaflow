@@ -1,7 +1,8 @@
 const BRASILIA_OFFSET_MS = 3 * 3_600_000;
 
 export function centsToDecimal(cents: number): string {
-  if (!Number.isSafeInteger(cents) || cents < 0) throw new RangeError(`Invalid amount in cents: ${cents}`);
+  if (!Number.isSafeInteger(cents) || cents < 0)
+    throw new RangeError(`Invalid amount in cents: ${cents}`);
   return `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, '0')}`;
 }
 

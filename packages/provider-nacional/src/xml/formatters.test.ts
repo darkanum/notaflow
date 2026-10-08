@@ -16,5 +16,7 @@ test('centsToDecimal rejects negative and fractional cents', () => {
 });
 
 test('formatBrasiliaDateTime writes UTC-3 without milliseconds', () => {
-  expect(formatBrasiliaDateTime(new Date('2026-10-08T18:30:15.123Z'))).toBe('2026-10-08T15:30:15-03:00');
+  expect(formatBrasiliaDateTime(new Date('2026-10-08T18:30:15.123Z'))).toBe(
+    '2026-10-08T15:30:15-03:00',
+  );
 });

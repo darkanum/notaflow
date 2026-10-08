@@ -35,7 +35,9 @@ describe('loadCertificate', () => {
   });
 
   test('rejects a file that is not PKCS#12 with INVALID_FILE', () => {
-    expect(codeOf(() => loadCertificate(Buffer.from('not a certificate'), 'x'))).toBe('INVALID_FILE');
+    expect(codeOf(() => loadCertificate(Buffer.from('not a certificate'), 'x'))).toBe(
+      'INVALID_FILE',
+    );
   });
 
   test('rejects an expired certificate with EXPIRED', () => {
