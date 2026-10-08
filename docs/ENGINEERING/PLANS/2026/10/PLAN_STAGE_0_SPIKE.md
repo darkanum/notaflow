@@ -425,7 +425,7 @@ In `RFC_NFSE_EMITTER.md`:
 
 - [ ] **Step 6: Check style**
 
-Run: `grep -rn "—" AGENTS.md docs/`
+Run: `grep -rnP '\x{2014}' AGENTS.md docs/`
 Expected: no output.
 
 - [ ] **Step 7: Commit**
