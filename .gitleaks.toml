@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "pkcs12-file-base64"
+description = "Base64 PKCS#12 blob"
+regex = '''MII[A-Za-z0-9+/]{200,}'''
