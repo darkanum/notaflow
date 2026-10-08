@@ -65,6 +65,22 @@ function tryGunzip(value: unknown): string | null {
   }
 }
 
+// The Sefin refuses XML without a declaration with E1229 "Xml não está utilizando codificação UTF-8".
+function withDeclaration(xml: string): string {
+  return xml.startsWith('<?xml') ? xml : `<?xml version="1.0" encoding="UTF-8"?>${xml}`;
+}
+
+// The Sefin sends Codigo and Descricao capitalized, unlike its published examples.
+function sefinError(raw: unknown): SefinError {
+  const r = (raw ?? {}) as Json;
+  const complemento = r.complemento ?? r.Complemento;
+  return {
+    codigo: String(r.codigo ?? r.Codigo ?? ''),
+    descricao: String(r.descricao ?? r.Descricao ?? ''),
+    ...(typeof complemento === 'string' ? { complemento } : {}),
+  };
+}
+
 function httpError(status: number, body: unknown): NacionalHttpError {
   return new NacionalHttpError(status, status >= 500 || status === 429, body);
 }
@@ -84,7 +100,7 @@ export class NacionalClient {
     let response: { status: number; body: unknown };
     try {
       response = await this.call('POST', `${this.urls.sefin}/nfse`, {
-        dpsXmlGZipB64: gzipBase64(signedDpsXml),
+        dpsXmlGZipB64: gzipBase64(withDeclaration(signedDpsXml)),
       });
     } catch (error) {
       return { kind: 'uncertain', reason: error instanceof Error ? error.message : String(error) };
@@ -116,7 +132,7 @@ export class NacionalClient {
       return {
         kind: 'rejected',
         dpsId: String(body.idDPS ?? body.idDps ?? ''),
-        errors: (body.erros as SefinError[] | undefined) ?? [],
+        errors: Array.isArray(body.erros) ? body.erros.map(sefinError) : [],
       };
     }
     return { kind: 'uncertain', reason: `HTTP ${response.status}` };
@@ -149,13 +165,12 @@ export class NacionalClient {
   async registerEvent(accessKey: string, signedEventXml: string): Promise<EventResult> {
     const url = `${this.urls.sefin}/nfse/${encodeURIComponent(accessKey)}/eventos`;
     const { status, body } = await this.call('POST', url, {
-      pedidoRegistroEventoXmlGZipB64: gzipBase64(signedEventXml),
+      pedidoRegistroEventoXmlGZipB64: gzipBase64(withDeclaration(signedEventXml)),
     });
     const data = (body ?? {}) as Json;
     // The event exists once the Sefin answers 201, even when its XML is unreadable.
     if (status === 201) return { kind: 'registered', eventXml: tryGunzip(data.eventoXmlGZipB64) };
-    if (status === 400 || status === 401)
-      return { kind: 'rejected', error: data.erro as SefinError };
+    if (status === 400 || status === 401) return { kind: 'rejected', error: sefinError(data.erro) };
     throw httpError(status, body);
   }
 

@@ -120,7 +120,26 @@ describe('issue', () => {
       .reply(201, { idDps: DPS_ID, chaveAcesso: KEY, nfseXmlGZipB64: gzipBase64('<NFSe/>') });
     await client.issue('<DPS>ç</DPS>');
     expect(gunzipBase64((JSON.parse(body) as { dpsXmlGZipB64: string }).dpsXmlGZipB64)).toBe(
-      '<DPS>ç</DPS>',
+      '<?xml version="1.0" encoding="UTF-8"?><DPS>ç</DPS>',
+    );
+  });
+
+  test('keeps an XML declaration that is already there', async () => {
+    let body = '';
+    agent
+      .get(SEFIN)
+      .intercept({
+        path: '/SefinNacional/nfse',
+        method: 'POST',
+        body: (b) => {
+          body = b;
+          return true;
+        },
+      })
+      .reply(201, { idDps: DPS_ID, chaveAcesso: KEY, nfseXmlGZipB64: gzipBase64('<NFSe/>') });
+    await client.issue('<?xml version="1.0" encoding="utf-8"?><DPS/>');
+    expect(gunzipBase64((JSON.parse(body) as { dpsXmlGZipB64: string }).dpsXmlGZipB64)).toBe(
+      '<?xml version="1.0" encoding="utf-8"?><DPS/>',
     );
   });
 
@@ -133,6 +152,18 @@ describe('issue', () => {
       kind: 'rejected',
       dpsId: DPS_ID,
       errors: [{ codigo: 'E0014', descricao: 'DPS duplicada' }],
+    });
+  });
+
+  test('400 reads the capitalized Codigo and Descricao the Sefin sends', async () => {
+    agent
+      .get(SEFIN)
+      .intercept({ path: '/SefinNacional/nfse', method: 'POST' })
+      .reply(400, { idDPS: DPS_ID, erros: [{ Codigo: 'E1229', Descricao: 'Xml inválido' }] });
+    expect(await client.issue('<DPS/>')).toEqual({
+      kind: 'rejected',
+      dpsId: DPS_ID,
+      errors: [{ codigo: 'E1229', descricao: 'Xml inválido' }],
     });
   });
 
@@ -236,6 +267,26 @@ describe('registerEvent', () => {
       .intercept({ path: `/SefinNacional/nfse/${KEY}/eventos`, method: 'POST' })
       .reply(201, { eventoXmlGZipB64: 'not-gzip' });
     expect(await client.registerEvent(KEY, '<x/>')).toEqual({ kind: 'registered', eventXml: null });
+  });
+
+  test('sends the event with an UTF-8 XML declaration', async () => {
+    let body = '';
+    agent
+      .get(SEFIN)
+      .intercept({
+        path: `/SefinNacional/nfse/${KEY}/eventos`,
+        method: 'POST',
+        body: (b) => {
+          body = b;
+          return true;
+        },
+      })
+      .reply(201, { eventoXmlGZipB64: gzipBase64('<evento/>') });
+    await client.registerEvent(KEY, '<pedRegEvento/>');
+    const sent = JSON.parse(body) as { pedidoRegistroEventoXmlGZipB64: string };
+    expect(gunzipBase64(sent.pedidoRegistroEventoXmlGZipB64)).toBe(
+      '<?xml version="1.0" encoding="UTF-8"?><pedRegEvento/>',
+    );
   });
 
   test('400 returns rejected with the single erro object', async () => {
