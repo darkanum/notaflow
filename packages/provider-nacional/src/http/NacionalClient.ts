@@ -81,6 +81,15 @@ function sefinError(raw: unknown): SefinError {
   };
 }
 
+// Some Sefin error bodies arrive in Latin-1 (seen with E0014), so invalid UTF-8 falls back to it.
+function decodeBody(bytes: Buffer): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return bytes.toString('latin1');
+  }
+}
+
 function httpError(status: number, body: unknown): NacionalHttpError {
   return new NacionalHttpError(status, status >= 500 || status === 429, body);
 }
@@ -222,7 +231,7 @@ export class NacionalClient {
       },
       ...(json ? { body: JSON.stringify(json) } : {}),
     });
-    const text = await response.body.text();
+    const text = decodeBody(Buffer.from(await response.body.arrayBuffer()));
     let body: unknown = text;
     try {
       body = text ? JSON.parse(text) : null;

@@ -167,6 +167,20 @@ describe('issue', () => {
     });
   });
 
+  test('reads an error body the Sefin encodes as Latin-1', async () => {
+    const latin1 = Buffer.from(
+      JSON.stringify({ erros: [{ Codigo: 'E0014', Descricao: 'Série e Número já existem' }] }),
+      'latin1',
+    );
+    agent
+      .get(SEFIN)
+      .intercept({ path: '/SefinNacional/nfse', method: 'POST' })
+      .reply(400, latin1, { headers: { 'content-type': 'application/json' } });
+    expect(await client.issue('<DPS/>')).toMatchObject({
+      errors: [{ codigo: 'E0014', descricao: 'Série e Número já existem' }],
+    });
+  });
+
   test('500 returns uncertain', async () => {
     agent.get(SEFIN).intercept({ path: '/SefinNacional/nfse', method: 'POST' }).reply(500, 'boom');
     expect((await client.issue('<DPS/>')).kind).toBe('uncertain');

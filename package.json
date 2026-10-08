@@ -13,7 +13,8 @@
     "format": "prettier --write .",
     "prepare": "git config core.hooksPath .githooks",
     "typecheck:root": "tsc -p tsconfig.json",
-    "spike:sefin": "tsx --env-file=.env.local spikes/2026-10-sefin/run.ts"
+    "spike:sefin": "tsx --env-file=.env.local spikes/2026-10-sefin/run.ts",
+    "spike:sefin:cancel": "tsx --env-file=.env.local spikes/2026-10-sefin/cancel.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

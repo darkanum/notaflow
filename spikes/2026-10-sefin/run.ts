@@ -1,34 +1,27 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
-  buildCancelEventXml,
   buildDpsXml,
-  createMtlsDispatcher,
   formatBrasiliaDate,
-  NacionalClient,
   type DpsInput,
   type ForeignTrade,
   type IssueResult,
 } from '@notaflow/provider-nacional';
-import { loadCertificate, NodeSigner } from '@notaflow/signer-node';
+import {
+  appVersion,
+  cancelInvoice,
+  certificate,
+  client,
+  env,
+  issuedKeys,
+  nodeSigner,
+  password,
+  pfx,
+  RESULTS_URL,
+} from './session';
 
-const env = (name: string): string => {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing ${name} in .env.local`);
-  return value;
-};
-
-const pfx = readFileSync(env('NOTAFLOW_PFX_PATH'));
-const password = env('NOTAFLOW_PFX_PASSWORD');
-const certificate = loadCertificate(pfx, password);
-const client = new NacionalClient({
-  environment: 'producao_restrita',
-  dispatcher: createMtlsDispatcher(certificate),
-});
-const nodeSigner = new NodeSigner();
 const results: Record<string, unknown> = { certificateNotAfter: certificate.notAfter };
-const appVersion = 'notaflow-spike-0';
 // Start from the clock so a rerun never reuses a DPS number from an earlier run.
 let nextNumber = Math.floor(Date.now() / 1000) % 1_000_000_000;
 
@@ -197,32 +190,24 @@ await step('4_reuse_after_rejection', async () => {
   return { first: summary(first), secondSameNumber: summary(second) };
 });
 
-const issued = Object.values(results).find(
-  (r): r is { kind: 'issued'; accessKey: string } =>
-    typeof r === 'object' && r !== null && (r as { kind?: string }).kind === 'issued',
-);
+const issued = [...new Set(issuedKeys(results))];
+const first = issued[0];
 
-if (issued) {
-  await step('5_get_nfse', async () => (await client.getNfse(issued.accessKey)).slice(0, 200));
-  await step('6_cancel', async () => {
-    const { xml } = buildCancelEventXml({
-      environment: 'producao_restrita',
-      requestedAt: new Date(Date.now() - 60_000),
-      appVersion,
-      authorCnpj: certificate.cnpj,
-      accessKey: issued.accessKey,
-      reason: '1',
-      justification: 'Teste de cancelamento do spike NotaFlow',
-    });
-    const signed = await nodeSigner.sign({
-      xml,
-      elementName: 'infPedReg',
-      certificate,
-      profile: 'rsa-sha1-c14n',
-    });
-    return client.registerEvent(issued.accessKey, signed);
-  });
+if (first) {
+  await step('5_get_nfse', async () => (await client.getNfse(first)).slice(0, 200));
 }
+// Every issued invoice is cancelled; produção restrita invoices must not stay active.
+await step('6_cancel', async () => {
+  const cancelled: Record<string, unknown> = {};
+  for (const accessKey of issued) {
+    try {
+      cancelled[accessKey] = await cancelInvoice(accessKey);
+    } catch (error) {
+      cancelled[accessKey] = { thrown: error instanceof Error ? error.message : String(error) };
+    }
+  }
+  return cancelled;
+});
 
 await step('7_find_by_dps_id_unknown', () => client.findByDpsId(buildDpsXml(dps('never sent')).id));
 await step('8_dfe_first_batch', async () => {
@@ -234,5 +219,16 @@ await step('8_dfe_first_batch', async () => {
   };
 });
 
-writeFileSync(new URL('./results.local.json', import.meta.url), JSON.stringify(results, null, 2));
+const cancelResults = (results['6_cancel'] ?? {}) as Record<string, { kind?: string }>;
+console.log(`Issued (${issued.length}):`, issued.join(', ') || 'none');
+console.log(
+  'Cancelled:',
+  issued.filter((key) => cancelResults[key]?.kind === 'registered').join(', ') || 'none',
+);
+console.log(
+  'NOT cancelled, run pnpm spike:sefin:cancel:',
+  issued.filter((key) => cancelResults[key]?.kind !== 'registered').join(', ') || 'none',
+);
+
+writeFileSync(RESULTS_URL, JSON.stringify(results, null, 2));
 console.log('Saved spikes/2026-10-sefin/results.local.json');
