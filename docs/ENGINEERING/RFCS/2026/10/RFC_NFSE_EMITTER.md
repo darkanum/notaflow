@@ -1,0 +1,327 @@
+# RFC: NotaFlow NFS-e Emitter
+
+**Status:** In Review
+**Date:** 2026-10-08
+**Owner:** Lincoln Santos (Vapulab)
+
+**References:**
+
+- [Sistema Nacional NFS-e](https://www.nfse.gov.br/) (official portal, technical docs, XSD schemas)
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Problem Statement](#problem-statement)
+3. [Solution](#solution)
+4. [Design](#design)
+5. [Data Model](#data-model)
+6. [Security](#security)
+7. [Delivery Stages](#delivery-stages)
+8. [Testing](#testing)
+9. [Documentation](#documentation)
+10. [File Locations](#file-locations)
+11. [Open Questions](#open-questions)
+
+---
+
+## Overview
+
+NotaFlow is a multi-tenant web app that issues and cancels Brazilian service invoices (NFS-e). Its main feature: open an invoice that was already issued, and issue a new one with the same fields. The user changes only what is different, usually the competence date, the amounts, or the customer.
+
+Each tenant uploads its own A1 digital certificate. The app issues invoices with the CNPJ of that certificate. The first tenant is Vapulab, which issues monthly invoices to CoGrader.
+
+The first provider is the national system (Sistema Nacional NFS-e: Sefin Nacional and ADN). The design puts every invoice system behind a provider interface, so municipal systems (ABRASF) or NF-e can come later.
+
+The product will charge for access in the future. The code is public on GitHub under the Business Source License.
+
+---
+
+## Problem Statement
+
+A company that issues the same invoice every month must fill the same form in the national portal (Emissor Nacional) every time. The portal has no "copy this invoice" action. The customer, the service code, the description, and the tax fields are typed again each month. Each manual entry is a chance for an error that requires a cancellation.
+
+The national system has a REST API, but it requires mTLS with an ICP-Brasil certificate and XMLDSig-signed XML. A small company cannot use the API without a tool.
+
+---
+
+## Solution
+
+A web app that:
+
+1. Stores each tenant's certificate, encrypted.
+2. Syncs every invoice the tenant issued from the ADN, and keeps a local list with history.
+3. Opens any invoice, by list or by access key, as a pre-filled form.
+4. Keeps a customer register, filled automatically from synced invoices and editable by hand.
+5. Issues a new invoice from an invoice or from a customer, with a review step that shows what changed.
+6. Cancels issued invoices.
+
+Users log in through Cloudflare Access. The app decides who can do what, through accounts and roles.
+
+---
+
+## Design
+
+### Architecture
+
+```
+nfse.vapulab.com
+   │  Cloudflare Access (email one-time PIN now, Google later)
+   ▼
+cloudflared ──► server (Fastify) ──► provider "nacional" ──► Sefin / ADN (mTLS)
+ (container)       │   also serves the web build
+                   ├──► Signer (Node or Python sidecar, chosen by the Stage 0 spike)
+                   └──► SQLite (Docker volume), certificates encrypted at rest
+```
+
+The app runs on the Vapulab VM (Ubuntu 24.04, Docker). The app container publishes no host port. Only the `cloudflared` container reaches it, on the internal Docker network.
+
+### Packages
+
+pnpm monorepo, TypeScript end to end.
+
+| Package | Responsibility | Depends on |
+| --- | --- | --- |
+| `packages/core` | Pure domain: `Account`, `Emitter`, `Customer`, `Invoice`, `DraftInvoice`. Defines the ports `InvoiceProvider`, `Signer`, `CertificateStore`, and the repositories. No I/O. | nothing |
+| `packages/provider-nacional` | `InvoiceProvider` for the national system: build the DPS, issue, query, sync the ADN, cancel. Converts XML to and from the `core` model. | `core` |
+| `packages/signer-node` | `Signer` with `xml-crypto` and `node-forge`. | `core` |
+| `services/signer-py` | `Signer` as a FastAPI sidecar with `signxml` and `lxml`. Exists only if the spike needs it. | none |
+| `apps/server` | HTTP API, persistence (Drizzle and SQLite), certificate vault, sync jobs, authorization. Wires ports to implementations. | all of the above |
+| `apps/web` | React and Vite UI. | `server` API |
+
+Rules:
+
+- `core` does not know XML, HTTP, or the database.
+- A new provider is a new package that implements `InvoiceProvider`. It does not change `core` or the UI.
+- Production runs one app container. The server serves the static web build. The Python sidecar is an optional Compose service.
+
+### Signer decision
+
+XMLDSig canonicalization is the main technical risk in Node. Signing sits behind the `Signer` port. In Stage 0, a spike signs the same DPS with both implementations and sends each to the national test environment (produção restrita).
+
+- If the Node signer is accepted, the project stays on one stack. The Python sidecar stays documented as plan B.
+- If the Node signer fails, the Python sidecar is enabled. Nothing outside the port changes.
+
+The spike result is recorded in this RFC.
+
+### Flow: onboard an emitter
+
+1. An `owner` uploads the `.pfx` file and its password.
+2. The app opens the certificate, reads the CNPJ and the company name, and checks the validity dates. It refuses a CNPJ that already belongs to another account.
+3. The user completes what the certificate does not carry: municipal registration, municipality (IBGE code), tax regime, and DPS series.
+4. Connection test: a read-only mTLS call (municipal parameters). On success, the certificate becomes active and the first sync starts.
+5. A new emitter always starts in `producao_restrita`. A switch to `producao` needs an explicit confirmation and goes to the audit log. The UI always shows a large badge with the current environment.
+
+### Flow: sync from the ADN
+
+- One job per emitter, every 30 minutes, plus a "sync now" button.
+- The job reads `/DFe/{NSU}` from the stored cursor. For each document:
+  - An NFS-e where the emitter is the provider: upsert the invoice by access key, and upsert the customer by document.
+  - An event (for example, a cancellation made here or in the portal): store the event and set the invoice to `cancelled`.
+  - An invoice where the emitter is the customer (received invoice): skip in Stage 1. The cursor still moves.
+- The cursor is saved in the same transaction as each batch. A crash resumes from the last saved batch, with no duplicates.
+- On HTTP 429 or 5xx, the job backs off, retries, and records the error in `sync_state`.
+- A customer field that a user edited by hand is never overwritten by the sync.
+
+### Flow: find by access key
+
+The user pastes a 50-digit access key. The app calls `GET /nfse/{accessKey}`, checks that the provider of the invoice is an emitter in the user's account, stores it through the same path as the sync, and opens it.
+
+### Flow: issue a new invoice
+
+Two entry points:
+
+- **From an invoice** ("issue similar"): the provider parser turns the stored XML into a `DraftInvoice`. Every field is pre-filled.
+- **From a customer** ("issue for this customer"): the form uses the customer record and copies service and amounts from the customer's last invoice. With no previous invoice, the service fields are empty.
+
+Steps:
+
+1. **Form.** The user can edit the competence date, amounts, description, service, and customer. The customer field searches the register and offers "new customer", which saves the record with the issue. The issue date is always "now", because the Sefin refuses a future date.
+2. **Review.** A confirmation screen shows the environment, the computed taxes, and every field that differs from the template, highlighted.
+3. **Send, protected against duplicates.**
+   - In one transaction, the app reserves the next DPS number and creates the invoice with `status = pending`.
+   - It builds the DPS, signs it, and sends it.
+   - Success: `issued`, with access key and XML.
+   - Validation rejection: `rejected`. The form shows the Sefin messages next to the fields.
+   - Uncertain result (timeout or 5xx): `unknown`. The app never resends blindly. It first queries the Sefin by DPS id. It resends only if no invoice exists for that DPS.
+
+### Flow: cancel
+
+1. On an issued invoice, "Cancel" opens a dialog with the reason (the fixed Sefin list) and a justification (minimum length from the Sefin rules).
+2. The confirmation shows invoice number, customer, amount, and environment.
+3. The app builds the cancellation event request, signs it with the same `Signer`, and sends it to `/nfse/{accessKey}/eventos`. On success it stores the event and sets the invoice to `cancelled`.
+4. If the Sefin refuses (for example, the municipal deadline expired), the app shows the message.
+
+### Invoice status
+
+```
+pending ──► issued ──► cancelled
+   │
+   ├──► rejected
+   └──► unknown ──► issued | rejected   (after reconciliation)
+```
+
+---
+
+## Data Model
+
+The official XML of each invoice is the source of truth. It is stored in full, compressed. The columns are a projection for listing and filtering. "Issue similar" always rebuilds the form from the XML, so no field is lost.
+
+Amounts are integer cents. Timestamps are UTC. The competence date is `YYYY-MM-DD`.
+
+### Tenancy
+
+| Table | Fields | Notes |
+| --- | --- | --- |
+| `accounts` | name, `status` (`active` / `suspended`), `plan` (free text for now), created at | The paying customer of NotaFlow. |
+| `users` | email, name, `platform_role` (`admin` / `user`), last login | A person. |
+| `memberships` | `user_id`, `account_id`, `role` (`owner` / `member`) | A person can belong to more than one account, for example an accountant. |
+
+### Fiscal data
+
+| Table | Fields | Notes |
+| --- | --- | --- |
+| `emitters` | `account_id`, CNPJ, company name, municipal registration, municipality (IBGE), tax regime, `provider` (`nacional`), `environment` (`producao` / `producao_restrita`), DPS series, next DPS number | CNPJ unique across the platform. |
+| `certificates` | `emitter_id`, encrypted `.pfx`, encrypted password, wrapped data key, CNPJ, subject, valid from, valid to, SHA-256 fingerprint, `active`, uploaded by, uploaded at | One active certificate per emitter. History is kept. |
+| `customers` | `emitter_id`, document type (CNPJ / CPF / foreign NIF), document, name, municipal registration, structured address (street, number, complement, district, IBGE municipality, ZIP), email, phone, `origin` (`manual` / `imported`), `archived`, list of fields edited by hand | Document unique per emitter. Archive hides, never deletes. |
+| `invoices` | `emitter_id`, `customer_id`, access key, NFS-e number, DPS series and number, `status`, issued at, competence, customer document and name, service code, service amount, ISS, net amount, `origin` (`synced` / `app`), `template_of`, compressed XML, Sefin messages, `created_by` | Access key unique, so the sync does not duplicate an invoice issued by the app. |
+| `invoice_events` | `invoice_id`, type, reason code, justification, protocol, compressed XML, `created_by` | |
+| `sync_state` | `emitter_id`, last NSU, last run, last error | |
+| `audit_log` | user email, account, action, entity, result, at | Certificate upload, environment switch, issue, cancel, user and account changes. |
+
+The invoice keeps its own copy of the customer data in the XML. A fix to the customer record does not change past invoices. The next invoice uses the new data.
+
+---
+
+## Security
+
+The main threat: a person who gets into an account can issue and cancel invoices with that company's CNPJ. The second threat: one account reads another account's data or certificate.
+
+### Authentication and authorization
+
+- **Cloudflare Access authenticates.** It proves the person owns the email. The Access policy accepts any authenticated email. Login is one-time PIN by email now. Google becomes an identity provider later, in the Cloudflare dashboard, with no app change.
+- **The app authorizes.** The server validates the Access JWT (`Cf-Access-Jwt-Assertion`) against the team public keys and the application `AUD`. The email from the token must exist in `users`. An unknown email sees "access not granted".
+- **The first user** is `lincoln.santos86@gmail.com` with `platform_role = admin`. A seed command creates it at install time.
+- **Local development** uses `AUTH_MODE=dev` with a fixed email. The server refuses to start with `AUTH_MODE=dev` and `NODE_ENV=production`.
+- **Mutations** require `Content-Type: application/json` and an `Origin` equal to the app domain. This blocks CSRF with the Access cookie.
+
+### Roles
+
+| Role | Can |
+| --- | --- |
+| `admin` (platform) | Admin panel: create and suspend accounts, add users, set the `owner` of each account. Cannot see invoices or certificates of an account by default. |
+| `owner` (account) | Everything in the account: certificates, emitters, invite `member`s, issue, cancel, customers. |
+| `member` (account) | Issue, cancel, manage customers. No access to certificates or users. |
+
+A `suspended` account can log in and read, but cannot issue or cancel. This is the hook for billing.
+
+### Account isolation
+
+- Every database query goes through a repository that requires the account context. No route queries a table directly.
+- A test walks every registered route. It checks that each route requires authentication and enforces the account. It also logs in as account A, requests data of account B, and expects 404.
+
+### Certificate vault
+
+- Envelope encryption: each certificate has its own data key (AES-256-GCM). The data key is wrapped by `NFSE_MASTER_KEY`. A master key rotation re-wraps the data keys only.
+- The certificate is decrypted in memory only, to sign or to open the mTLS connection. It never goes to disk in clear text and never goes to a log.
+- The UI shows the certificate validity and warns 30 days before it expires.
+- If the master key is lost, stored certificates become unreadable. Users upload the `.pfx` again. Invoices are not lost.
+
+### Secrets and the public repository
+
+- Secrets live only in the VM `.env` file, mode `600`: `NFSE_MASTER_KEY`, `CF_ACCESS_AUD`, `CF_ACCESS_TEAM_DOMAIN`, `TUNNEL_TOKEN`. The repository has only `.env.example`.
+- `.gitignore` blocks from the first commit: `*.pfx`, `*.p12`, `*.pem`, `.env*` except `.env.example`, and `data/`.
+- A `gitleaks` pre-commit hook, plus GitHub secret scanning and push protection.
+- Tests generate a self-signed certificate at run time and use synthetic XML with fake CNPJs and amounts. No real invoice enters the repository.
+- Logs never contain a certificate, a password, the master key, or a full XML. They contain the access key, the status, and Sefin error codes.
+
+### Container
+
+- The app runs as a non-root user, with a read-only file system except the `data/` volume.
+- Dependabot keeps dependencies current.
+
+### Recovery
+
+- The ADN is the backup for invoices. After a VM loss: deploy again, upload the `.pfx`, reset the cursor. The sync rebuilds invoices, events, and imported customers.
+- Data that exists only in the database: accounts, users, manual customer data, the audit log, and DPS numbering. A daily `sqlite3 .backup` on the VM covers it in Stage 1.
+- The master key is kept in a password manager, never next to the backup.
+
+---
+
+## Delivery Stages
+
+| Stage | Delivers | Done when |
+| --- | --- | --- |
+| **0. Spike** | Repository and docs skeleton. A script that signs one DPS with both signers, issues and cancels in produção restrita, and reads `/DFe`. | Signer decision recorded here. The three spike questions below have evidence. |
+| **1a. Read** | `core`, `provider-nacional` (parser, sync, access-key lookup), certificate vault, accounts, users, roles, admin panel. | Vapulab account created, certificate uploaded, invoices issued to CoGrader listed from the ADN. |
+| **1b. Write** | Customer register, issue from invoice or customer, cancel. | In produção restrita: issue similar, edit amounts and customer, cancel. A simulated timeout ends in `unknown` and reconciles with no duplicate. |
+| **1c. Production** | Docker Compose on the VM, `cloudflared`, Access application, daily backup, DNS migration checklist. | `nfse.vapulab.com` is live. The first real Vapulab invoice to CoGrader is issued, with Lincoln watching. |
+
+### Planned, not in Stage 1
+
+- Upload of an invoice XML as a template.
+- CNPJ lookup to fill customer data (BrasilAPI).
+- Off-VM backup (for example Cloudflare R2).
+- Billing, self-service signup, admin support access with audit.
+- Cancellation by substitution and the fiscal analysis request.
+- Other providers (ABRASF municipal systems, NF-e).
+- Email delivery of the invoice to the customer.
+- Postgres.
+- Terms of use and privacy policy (LGPD). Required before the first paying customer, because the app stores third-party A1 certificates.
+
+---
+
+## Testing
+
+- **Unit (Vitest):** `core` rules, such as tax computation in cents and status transitions.
+- **Provider:** synthetic XML fixtures. A round-trip test (XML to draft to DPS) that loses no field. The generated DPS validates against the official XSD schemas, which are public and live in the repository.
+- **Signer:** each implementation signs, and an independent verifier checks the signature. The two implementations verify each other.
+- **Server:** the route sweep for authentication and isolation. Integration tests against a mocked Sefin: rejection, timeout to `unknown` to reconciliation, and 429 during sync.
+- **End to end in produção restrita:** runs locally only, with a real certificate. Never in CI.
+- **CI (GitHub Actions):** lint, typecheck, tests, `gitleaks`.
+
+---
+
+## Documentation
+
+The repository follows the CoGrader documentation standard. All docs are in English and follow the writing standard (inverted pyramid, Simplified Technical English).
+
+```
+AGENTS.md                         router and global rules
+docs/README.md                    category hub
+docs/ENGINEERING/
+  ARCHITECTURE/                   OVERVIEW, TENANCY, PROVIDERS, CERTIFICATE_VAULT, INVOICE_LIFECYCLE
+  CONVENTIONS/                    DOCUMENTATION_STANDARD, WRITING_STYLE, SECRETS, CODE_COMMENTS
+  RFCS/2026/10/RFC_NFSE_EMITTER.md
+  PLANS/2026/10/PLAN_STAGE_1.md
+docs/TUTORIALS/                   DEPLOY_ON_VM, MIGRATE_DNS_TO_CLOUDFLARE, ONBOARD_ACCOUNT
+docs/TEMPLATES/                   RFC, PLAN, TUTORIAL
+```
+
+Each package has a short `AGENTS.md` that points into `docs/`. File and folder names use `SCREAMING_SNAKE_CASE`. Dated categories use `YYYY/MM/`.
+
+---
+
+## File Locations
+
+| Path | Purpose |
+| --- | --- |
+| `packages/core/src/` | Domain types, ports, rules |
+| `packages/provider-nacional/src/` | DPS builder, XML parser, Sefin and ADN clients |
+| `packages/provider-nacional/schemas/` | Official XSD files |
+| `packages/signer-node/src/` | Node `Signer` |
+| `services/signer-py/` | Python `Signer` sidecar (only if needed) |
+| `apps/server/src/` | API, repositories, vault, jobs, auth |
+| `apps/web/src/` | UI |
+| `deploy/docker-compose.yml` | App, `cloudflared`, optional signer |
+| `LICENSE` | Business Source License 1.1 |
+
+---
+
+## Open Questions
+
+- [ ] Spike: can a rejected DPS number be reused, or is it consumed?
+- [ ] Spike: the exact endpoint to query an invoice by DPS id (for `unknown` reconciliation).
+- [ ] Spike: the cancellation reason codes and the minimum justification length.
+- [ ] Spike: Node or Python `Signer`.
+- [ ] BSL parameters. Proposal: Change Date four years after each release, Change License Apache-2.0, no Additional Use Grant (production use needs a commercial license).
+- [ ] Lincoln migrates the `vapulab.com` nameservers from Hostinger to Cloudflare. The A, two MX, and SPF records must be present in Cloudflare before the switch.
