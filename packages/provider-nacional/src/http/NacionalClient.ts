@@ -12,12 +12,12 @@ export interface SefinError {
 export type IssueResult =
   | { kind: 'issued'; accessKey: string; dpsId: string; nfseXml: string; alerts: SefinError[] }
   | { kind: 'rejected'; dpsId: string; errors: SefinError[] }
-  | { kind: 'uncertain'; reason: string };
+  | { kind: 'uncertain'; reason: string; accessKey?: string };
 
 export type DpsLookup = { kind: 'found'; accessKey: string } | { kind: 'not_found' };
 
 export type EventResult =
-  { kind: 'registered'; eventXml: string } | { kind: 'rejected'; error: SefinError };
+  { kind: 'registered'; eventXml: string | null } | { kind: 'rejected'; error: SefinError };
 
 export interface DfeDocument {
   nsu: number;
@@ -56,6 +56,15 @@ interface RawDfeItem {
 
 type Json = Record<string, unknown>;
 
+function tryGunzip(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  try {
+    return gunzipBase64(value);
+  } catch {
+    return null;
+  }
+}
+
 function httpError(status: number, body: unknown): NacionalHttpError {
   return new NacionalHttpError(status, status >= 500 || status === 429, body);
 }
@@ -83,14 +92,22 @@ export class NacionalClient {
     const body = (response.body ?? {}) as Json;
     if (response.status === 201) {
       // A 201 we cannot read may still be a real invoice, so it is uncertain, never an error.
-      if (typeof body.chaveAcesso !== 'string' || typeof body.nfseXmlGZipB64 !== 'string') {
-        return { kind: 'uncertain', reason: 'HTTP 201 without an access key or NFS-e XML' };
+      if (typeof body.chaveAcesso !== 'string') {
+        return { kind: 'uncertain', reason: 'HTTP 201 without an access key' };
+      }
+      const nfseXml = tryGunzip(body.nfseXmlGZipB64);
+      if (nfseXml === null) {
+        return {
+          kind: 'uncertain',
+          reason: 'HTTP 201 without a readable NFS-e XML',
+          accessKey: body.chaveAcesso,
+        };
       }
       return {
         kind: 'issued',
         accessKey: body.chaveAcesso,
         dpsId: String(body.idDps),
-        nfseXml: gunzipBase64(body.nfseXmlGZipB64),
+        nfseXml,
         alerts: (body.alertas as SefinError[] | undefined) ?? [],
       };
     }
@@ -111,7 +128,12 @@ export class NacionalClient {
       `${this.urls.sefin}/dps/${encodeURIComponent(dpsId)}`,
     );
     if (status === 200) return { kind: 'found', accessKey: String((body as Json).chaveAcesso) };
-    if (status === 404) return { kind: 'not_found' };
+    // A proxy or gateway 404 is not an answer about the DPS, so only a JSON body means not found.
+    if (status === 404) {
+      if (typeof body === 'object' && body !== null && !Array.isArray(body))
+        return { kind: 'not_found' };
+      throw new NacionalHttpError(status, true, body);
+    }
     throw httpError(status, body);
   }
 
@@ -130,8 +152,8 @@ export class NacionalClient {
       pedidoRegistroEventoXmlGZipB64: gzipBase64(signedEventXml),
     });
     const data = (body ?? {}) as Json;
-    if (status === 201)
-      return { kind: 'registered', eventXml: gunzipBase64(String(data.eventoXmlGZipB64)) };
+    // The event exists once the Sefin answers 201, even when its XML is unreadable.
+    if (status === 201) return { kind: 'registered', eventXml: tryGunzip(data.eventoXmlGZipB64) };
     if (status === 400 || status === 401)
       return { kind: 'rejected', error: data.erro as SefinError };
     throw httpError(status, body);

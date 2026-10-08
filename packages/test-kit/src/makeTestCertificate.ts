@@ -7,6 +7,7 @@ export interface TestCertificateOptions {
   password?: string;
   notBefore?: Date;
   notAfter?: Date;
+  altNames?: ({ dns: string } | { ip: string })[];
 }
 
 export interface TestCertificate {
@@ -43,7 +44,17 @@ export function makeTestCertificate(options: TestCertificateOptions = {}): TestC
   cert.setIssuer(attributes);
   cert.setExtensions([
     { name: 'keyUsage', digitalSignature: true, keyEncipherment: true },
-    { name: 'extKeyUsage', clientAuth: true },
+    { name: 'extKeyUsage', clientAuth: true, serverAuth: true },
+    ...(options.altNames
+      ? [
+          {
+            name: 'subjectAltName',
+            altNames: options.altNames.map((n) =>
+              'ip' in n ? { type: 7, ip: n.ip } : { type: 2, value: n.dns },
+            ),
+          },
+        ]
+      : []),
   ]);
   cert.sign(forgeKey, forge.md.sha256.create());
 

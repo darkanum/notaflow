@@ -1,3 +1,7 @@
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { makeTestCertificate } from '@notaflow/test-kit';
 import { describe, expect, test } from 'vitest';
 import { CertificateError, type CertificateErrorCode } from './CertificateError';
@@ -22,6 +26,50 @@ describe('loadCertificate', () => {
     expect(material.privateKeyPem).toContain('PRIVATE KEY');
     expect(material.certificatePem).toContain('BEGIN CERTIFICATE');
     expect(material.fingerprintSha256).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  const hasOpenssl = spawnSync('openssl', ['version']).status === 0;
+
+  // OpenSSL 3 refuses RC2-40 without -legacy, and many real e-CNPJ files use it.
+  test.skipIf(!hasOpenssl)('loads a legacy RC2-40 .pfx built by openssl', () => {
+    const cert = makeTestCertificate({ cnpj: '12345678000195' });
+    const dir = mkdtempSync(join(tmpdir(), 'notaflow-rc2-'));
+    try {
+      writeFileSync(join(dir, 'key.pem'), cert.privateKeyPem);
+      writeFileSync(join(dir, 'cert.pem'), cert.certificatePem);
+      const pfxPath = join(dir, 'legacy.pfx');
+      const pass = `pass:${cert.password}`;
+      const run = (args: string[]) => {
+        const result = spawnSync('openssl', args, { encoding: 'utf8' });
+        expect(result.status, result.stderr).toBe(0);
+        return `${result.stdout}${result.stderr}`;
+      };
+      run([
+        'pkcs12',
+        '-export',
+        '-legacy',
+        '-certpbe',
+        'PBE-SHA1-RC2-40',
+        '-keypbe',
+        'PBE-SHA1-RC2-40',
+        '-inkey',
+        join(dir, 'key.pem'),
+        '-in',
+        join(dir, 'cert.pem'),
+        '-out',
+        pfxPath,
+        '-passout',
+        pass,
+      ]);
+      expect(
+        run(['pkcs12', '-info', '-noout', '-legacy', '-in', pfxPath, '-passin', pass]),
+      ).toContain('RC2');
+      const material = loadCertificate(readFileSync(pfxPath), cert.password);
+      expect(material.cnpj).toBe('12345678000195');
+      expect(material.privateKeyPem).toContain('PRIVATE KEY');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test('reads an alphanumeric CNPJ', () => {

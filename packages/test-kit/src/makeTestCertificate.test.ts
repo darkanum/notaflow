@@ -18,3 +18,14 @@ test('respects custom validity dates', () => {
   const cert = makeTestCertificate({ notBefore: new Date('2019-01-01T00:00:00Z'), notAfter });
   expect(forge.pki.certificateFromPem(cert.certificatePem).validity.notAfter).toEqual(notAfter);
 });
+
+test('adds subject alternative names for a TLS server certificate', () => {
+  const cert = makeTestCertificate({ altNames: [{ ip: '127.0.0.1' }, { dns: 'localhost' }] });
+  const san = forge.pki.certificateFromPem(cert.certificatePem).getExtension('subjectAltName') as {
+    altNames: { type: number; value?: string; ip?: string }[];
+  } | null;
+  expect(san?.altNames).toEqual([
+    expect.objectContaining({ type: 7, ip: '127.0.0.1' }),
+    expect.objectContaining({ type: 2, value: 'localhost' }),
+  ]);
+});

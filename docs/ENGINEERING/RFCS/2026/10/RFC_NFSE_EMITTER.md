@@ -327,5 +327,6 @@ Each package has a short `AGENTS.md` that points into `docs/`. File and folder n
 - [x] The endpoint to query an invoice by DPS id: `GET /dps/{id}`. HTTP 404 means no NFS-e exists for that DPS.
 - [x] Cancellation reason codes (`cMotivo`): 1 Erro na Emissão, 2 Serviço não Prestado, 9 Outros. The justification (`xMotivo`) has 15 to 255 characters.
 - [ ] Spike: Node or Python `Signer`.
+- [ ] Spike: which Sefin error code means "an NFS-e already exists for this DPS"? Today the client maps every HTTP 400 to `rejected`. A resend after an `unknown` result can get that 400 although the invoice exists. The code must map to a lookup by DPS id, not to `rejected`.
 - [ ] BSL parameters. Proposal: Change Date four years after each release, Change License Apache-2.0, no Additional Use Grant (production use needs a commercial license).
 - [ ] Lincoln migrates the `vapulab.com` nameservers from Hostinger to Cloudflare. The A, two MX, and SPF records must be present in Cloudflare before the switch.

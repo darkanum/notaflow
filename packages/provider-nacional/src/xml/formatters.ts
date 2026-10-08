@@ -10,3 +10,7 @@ export function centsToDecimal(cents: number): string {
 export function formatBrasiliaDateTime(date: Date): string {
   return `${new Date(date.getTime() - BRASILIA_OFFSET_MS).toISOString().slice(0, 19)}-03:00`;
 }
+
+export function formatBrasiliaDate(date: Date): string {
+  return formatBrasiliaDateTime(date).slice(0, 10);
+}

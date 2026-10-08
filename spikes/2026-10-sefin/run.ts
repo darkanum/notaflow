@@ -5,6 +5,7 @@ import {
   buildCancelEventXml,
   buildDpsXml,
   createMtlsDispatcher,
+  formatBrasiliaDate,
   NacionalClient,
   type DpsInput,
   type IssueResult,
@@ -31,13 +32,14 @@ const appVersion = 'notaflow-spike-0';
 let nextNumber = Math.floor(Date.now() / 1000) % 1_000_000_000;
 
 function dps(description: string, serviceCents = 1000): DpsInput {
+  const issuedAt = new Date(Date.now() - 60_000);
   return {
     environment: 'producao_restrita',
-    issuedAt: new Date(Date.now() - 60_000),
+    issuedAt,
     appVersion,
     series: env('NOTAFLOW_DPS_SERIES'),
     number: nextNumber++,
-    competence: new Date().toISOString().slice(0, 10),
+    competence: formatBrasiliaDate(issuedAt),
     emitterMunicipality: env('NOTAFLOW_EMITTER_MUNICIPALITY'),
     provider: {
       cnpj: certificate.cnpj,

@@ -1,6 +1,9 @@
+import { createServer } from 'node:https';
+import type { AddressInfo } from 'node:net';
+import type { TLSSocket } from 'node:tls';
 import { loadCertificate } from '@notaflow/signer-node';
 import { makeTestCertificate } from '@notaflow/test-kit';
-import { Agent, MockAgent } from 'undici';
+import { Agent, MockAgent, request } from 'undici';
 import { beforeEach, describe, expect, test } from 'vitest';
 import { createMtlsDispatcher } from './createMtlsDispatcher';
 import { gunzipBase64, gzipBase64 } from './gzipBase64';
@@ -35,6 +38,51 @@ test('createMtlsDispatcher builds an Agent from PEM material', () => {
   expect(createMtlsDispatcher(loadCertificate(testCert.pfx, testCert.password))).toBeInstanceOf(
     Agent,
   );
+});
+
+describe('mTLS handshake', () => {
+  const server = makeTestCertificate({ altNames: [{ ip: '127.0.0.1' }] });
+  const clientCert = makeTestCertificate({ cnpj: '12345678000195' });
+
+  async function withServer(run: (url: string) => Promise<void>): Promise<void> {
+    const https = createServer(
+      {
+        key: server.privateKeyPem,
+        cert: server.certificatePem,
+        ca: [clientCert.certificatePem],
+        requestCert: true,
+        rejectUnauthorized: true,
+      },
+      (req, res) => {
+        const peer = (req.socket as TLSSocket).getPeerCertificate();
+        res.end(String(peer.subject.CN));
+      },
+    );
+    await new Promise<void>((resolve) => https.listen(0, '127.0.0.1', resolve));
+    try {
+      await run(`https://127.0.0.1:${(https.address() as AddressInfo).port}/`);
+    } finally {
+      https.closeAllConnections();
+      await new Promise((resolve) => https.close(resolve));
+    }
+  }
+
+  test('presents the client certificate to a server that requires one', async () => {
+    const dispatcher = createMtlsDispatcher(loadCertificate(clientCert.pfx, clientCert.password), {
+      ca: server.certificatePem,
+    });
+    await withServer(async (url) => {
+      const response = await request(url, { dispatcher });
+      expect(await response.body.text()).toBe('EMPRESA TESTE LTDA:12345678000195');
+    });
+  });
+
+  test('the same server refuses a connection without a client certificate', async () => {
+    const dispatcher = new Agent({ connect: { ca: server.certificatePem } });
+    await withServer(async (url) => {
+      await expect(request(url, { dispatcher })).rejects.toThrow();
+    });
+  });
 });
 
 describe('issue', () => {
@@ -98,6 +146,22 @@ describe('issue', () => {
     expect((await client.issue('<DPS/>')).kind).toBe('uncertain');
   });
 
+  test('a 201 with an access key but no NFS-e XML returns uncertain with the key', async () => {
+    agent
+      .get(SEFIN)
+      .intercept({ path: '/SefinNacional/nfse', method: 'POST' })
+      .reply(201, { idDps: DPS_ID, chaveAcesso: KEY });
+    expect(await client.issue('<DPS/>')).toMatchObject({ kind: 'uncertain', accessKey: KEY });
+  });
+
+  test('a 201 with corrupt NFS-e XML returns uncertain with the key', async () => {
+    agent
+      .get(SEFIN)
+      .intercept({ path: '/SefinNacional/nfse', method: 'POST' })
+      .reply(201, { idDps: DPS_ID, chaveAcesso: KEY, nfseXmlGZipB64: 'not-gzip' });
+    expect(await client.issue('<DPS/>')).toMatchObject({ kind: 'uncertain', accessKey: KEY });
+  });
+
   test('a timeout returns uncertain', async () => {
     agent
       .get(SEFIN)
@@ -124,6 +188,26 @@ describe('findByDpsId', () => {
       .reply(404, {});
     expect(await client.findByDpsId(DPS_ID)).toEqual({ kind: 'not_found' });
   });
+
+  test('a 404 with an HTML body throws a retryable error', async () => {
+    agent
+      .get(SEFIN)
+      .intercept({ path: `/SefinNacional/dps/${DPS_ID}`, method: 'GET' })
+      .reply(404, '<html>Not Found</html>');
+    await expect(client.findByDpsId(DPS_ID)).rejects.toMatchObject({
+      name: 'NacionalHttpError',
+      status: 404,
+      retryable: true,
+    });
+  });
+
+  test('a 404 with an empty body throws a retryable error', async () => {
+    agent
+      .get(SEFIN)
+      .intercept({ path: `/SefinNacional/dps/${DPS_ID}`, method: 'GET' })
+      .reply(404, '');
+    await expect(client.findByDpsId(DPS_ID)).rejects.toMatchObject({ retryable: true });
+  });
 });
 
 describe('registerEvent', () => {
@@ -136,6 +220,22 @@ describe('registerEvent', () => {
       kind: 'registered',
       eventXml: '<evento/>',
     });
+  });
+
+  test('a 201 without event XML returns registered with a null eventXml', async () => {
+    agent
+      .get(SEFIN)
+      .intercept({ path: `/SefinNacional/nfse/${KEY}/eventos`, method: 'POST' })
+      .reply(201, {});
+    expect(await client.registerEvent(KEY, '<x/>')).toEqual({ kind: 'registered', eventXml: null });
+  });
+
+  test('a 201 with corrupt event XML returns registered with a null eventXml', async () => {
+    agent
+      .get(SEFIN)
+      .intercept({ path: `/SefinNacional/nfse/${KEY}/eventos`, method: 'POST' })
+      .reply(201, { eventoXmlGZipB64: 'not-gzip' });
+    expect(await client.registerEvent(KEY, '<x/>')).toEqual({ kind: 'registered', eventXml: null });
   });
 
   test('400 returns rejected with the single erro object', async () => {
