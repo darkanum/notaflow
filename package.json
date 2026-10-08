@@ -8,10 +8,12 @@
   },
   "scripts": {
     "lint": "eslint .",
-    "typecheck": "pnpm -r --parallel typecheck",
+    "typecheck": "pnpm -r --parallel typecheck && pnpm typecheck:root",
     "test": "vitest run",
     "format": "prettier --write .",
-    "prepare": "git config core.hooksPath .githooks"
+    "prepare": "git config core.hooksPath .githooks",
+    "typecheck:root": "tsc -p tsconfig.json",
+    "spike:sefin": "tsx --env-file=.env.local spikes/2026-10-sefin/run.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
@@ -21,7 +23,9 @@
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.18.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "@notaflow/provider-nacional": "workspace:*",
+    "@notaflow/signer-node": "workspace:*"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

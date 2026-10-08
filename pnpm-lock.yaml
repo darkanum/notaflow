@@ -11,6 +11,12 @@ importers:
       '@eslint/js':
         specifier: ^9.17.0
         version: 9.39.5
+      '@notaflow/provider-nacional':
+        specifier: workspace:*
+        version: link:packages/provider-nacional
+      '@notaflow/signer-node':
+        specifier: workspace:*
+        version: link:packages/signer-node
       '@types/node':
         specifier: ^22.10.0
         version: 22.20.5
