@@ -1,7 +1,7 @@
 import { escapeXml } from '../xml/escapeXml';
 import { centsToDecimal, formatBrasiliaDateTime } from '../xml/formatters';
 import { buildDpsId } from './buildDpsId';
-import type { Address, DpsInput } from './types';
+import type { Address, DpsInput, ForeignAddress, ForeignTrade } from './types';
 
 export const NFSE_NAMESPACE = 'http://www.sped.fazenda.gov.br/nfse';
 export const SCHEMA_VERSION = '1.01';
@@ -30,6 +30,7 @@ export function buildDpsXml(input: DpsInput): { id: string; xml: string } {
     customer(input) +
     service(input) +
     amounts(input) +
+    ibsCbs(input) +
     `</infDPS></DPS>`;
 
   return { id, xml };
@@ -68,12 +69,19 @@ function customer({ customer: c }: DpsInput): string {
   );
 }
 
-function address(a: Address): string {
+function address(a: Address | ForeignAddress): string {
+  const place =
+    'country' in a
+      ? '<endExt>' +
+        tag('cPais', a.country) +
+        tag('cEndPost', a.postalCode) +
+        tag('xCidade', a.city) +
+        tag('xEstProvReg', a.region) +
+        '</endExt>'
+      : '<endNac>' + tag('cMun', a.municipality) + tag('CEP', a.zip) + '</endNac>';
   return (
-    '<end><endNac>' +
-    tag('cMun', a.municipality) +
-    tag('CEP', a.zip) +
-    '</endNac>' +
+    '<end>' +
+    place +
     tag('xLgr', a.street) +
     tag('nro', a.number) +
     tag('xCpl', a.complement) +
@@ -91,7 +99,24 @@ function service({ service: s }: DpsInput): string {
     tag('cTribMun', s.municipalTaxCode) +
     tag('xDescServ', s.description) +
     tag('cNBS', s.nbsCode) +
-    '</cServ></serv>'
+    '</cServ>' +
+    (s.foreignTrade ? foreignTrade(s.foreignTrade) : '') +
+    '</serv>'
+  );
+}
+
+function foreignTrade(f: ForeignTrade): string {
+  return (
+    '<comExt>' +
+    tag('mdPrestacao', f.mode) +
+    tag('vincPrest', f.providerLink) +
+    tag('tpMoeda', f.currency) +
+    tag('vServMoeda', centsToDecimal(f.amountInCurrencyCents)) +
+    tag('mecAFComexP', f.providerSupport) +
+    tag('mecAFComexT', f.customerSupport) +
+    tag('movTempBens', f.temporaryGoods) +
+    tag('mdic', f.mdic) +
+    '</comExt>'
   );
 }
 
@@ -101,10 +126,35 @@ function amounts({ amounts: a, tax: t }: DpsInput): string {
     tag('vServ', centsToDecimal(a.serviceCents)) +
     '</vServPrest><trib><tribMun>' +
     tag('tribISSQN', t.issqnTaxation) +
+    tag('cPaisResult', t.resultCountry) +
     tag('tpRetISSQN', t.issRetention) +
     tag('pAliq', t.issRatePercent) +
-    '</tribMun><totTrib>' +
-    tag('indTotTrib', '0') +
+    '</tribMun>' +
+    (t.pisCofins
+      ? '<tribFed><piscofins>' +
+        tag('CST', t.pisCofins.cst) +
+        tag('tpRetPisCofins', t.pisCofins.retention) +
+        '</piscofins></tribFed>'
+      : '') +
+    '<totTrib>' +
+    (t.simplesTotalPercent === undefined
+      ? tag('indTotTrib', '0')
+      : tag('pTotTribSN', t.simplesTotalPercent)) +
     '</totTrib></trib></valores>'
+  );
+}
+
+function ibsCbs({ ibsCbs: g }: DpsInput): string {
+  if (!g) return '';
+  return (
+    '<IBSCBS>' +
+    tag('finNFSe', g.purpose) +
+    tag('indFinal', g.finalConsumer) +
+    tag('cIndOp', g.operationCode) +
+    tag('indDest', g.destination) +
+    '<valores><trib><gIBSCBS>' +
+    tag('CST', g.cst) +
+    tag('cClassTrib', g.classCode) +
+    '</gIBSCBS></trib></valores></IBSCBS>'
   );
 }

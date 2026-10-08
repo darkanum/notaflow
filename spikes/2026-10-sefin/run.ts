@@ -8,6 +8,7 @@ import {
   formatBrasiliaDate,
   NacionalClient,
   type DpsInput,
+  type ForeignTrade,
   type IssueResult,
 } from '@notaflow/provider-nacional';
 import { loadCertificate, NodeSigner } from '@notaflow/signer-node';
@@ -43,22 +44,91 @@ function dps(description: string, serviceCents = 1000): DpsInput {
     emitterMunicipality: env('NOTAFLOW_EMITTER_MUNICIPALITY'),
     provider: {
       cnpj: certificate.cnpj,
-      municipalRegistration: env('NOTAFLOW_EMITTER_MUNICIPAL_REGISTRATION'),
+      ...(process.env.NOTAFLOW_EMITTER_MUNICIPAL_REGISTRATION
+        ? { municipalRegistration: process.env.NOTAFLOW_EMITTER_MUNICIPAL_REGISTRATION }
+        : {}),
       simplesNacional: env('NOTAFLOW_SIMPLES_NACIONAL') as DpsInput['provider']['simplesNacional'],
+      ...(process.env.NOTAFLOW_SIMPLES_REGIME
+        ? {
+            simplesRegime: process.env.NOTAFLOW_SIMPLES_REGIME as NonNullable<
+              DpsInput['provider']['simplesRegime']
+            >,
+          }
+        : {}),
       specialRegime: env('NOTAFLOW_SPECIAL_REGIME') as DpsInput['provider']['specialRegime'],
     },
-    customer: {
-      document: { type: 'CNPJ', value: env('NOTAFLOW_CUSTOMER_CNPJ') },
-      name: env('NOTAFLOW_CUSTOMER_NAME'),
-    },
+    ...(foreignCustomer ? exportParts() : domesticParts()),
     service: {
       municipality: env('NOTAFLOW_EMITTER_MUNICIPALITY'),
       nationalTaxCode: env('NOTAFLOW_SERVICE_NATIONAL_CODE'),
       description,
       ...(process.env.NOTAFLOW_SERVICE_NBS ? { nbsCode: process.env.NOTAFLOW_SERVICE_NBS } : {}),
+      ...(foreignCustomer ? { foreignTrade: foreignTrade(serviceCents) } : {}),
     },
     amounts: { serviceCents },
+  };
+}
+
+// With a NIF the spike mirrors the emitter's real export invoice; without it, a domestic one.
+const foreignCustomer = Boolean(process.env.NOTAFLOW_CUSTOMER_NIF);
+
+function domesticParts(): Pick<DpsInput, 'customer' | 'tax'> {
+  return {
+    customer: {
+      document: { type: 'CNPJ', value: env('NOTAFLOW_CUSTOMER_CNPJ') },
+      name: env('NOTAFLOW_CUSTOMER_NAME'),
+    },
     tax: { issqnTaxation: '1', issRetention: '1' },
+  };
+}
+
+function exportParts(): Pick<DpsInput, 'customer' | 'tax' | 'ibsCbs'> {
+  const country = env('NOTAFLOW_CUSTOMER_COUNTRY');
+  return {
+    customer: {
+      document: { type: 'NIF', value: env('NOTAFLOW_CUSTOMER_NIF') },
+      name: env('NOTAFLOW_CUSTOMER_NAME'),
+      address: {
+        country,
+        postalCode: env('NOTAFLOW_CUSTOMER_POSTAL_CODE'),
+        city: env('NOTAFLOW_CUSTOMER_CITY'),
+        region: env('NOTAFLOW_CUSTOMER_REGION'),
+        street: env('NOTAFLOW_CUSTOMER_STREET'),
+        number: env('NOTAFLOW_CUSTOMER_NUMBER'),
+        district: env('NOTAFLOW_CUSTOMER_DISTRICT'),
+      },
+    },
+    tax: {
+      issqnTaxation: '3',
+      resultCountry: country,
+      issRetention: '1',
+      pisCofins: { cst: '00', retention: '0' },
+      ...(process.env.NOTAFLOW_SIMPLES_TOTAL_PERCENT
+        ? { simplesTotalPercent: process.env.NOTAFLOW_SIMPLES_TOTAL_PERCENT }
+        : {}),
+    },
+    ibsCbs: {
+      purpose: '0',
+      finalConsumer: '0',
+      operationCode: '100302',
+      destination: '0',
+      cst: '410',
+      classCode: '410027',
+    },
+  };
+}
+
+function foreignTrade(serviceCents: number): ForeignTrade {
+  return {
+    mode: '1',
+    providerLink: '0',
+    currency: '220',
+    // A rough BRL to USD rate is enough for the spike; the Sefin does not check it.
+    amountInCurrencyCents: Math.round(serviceCents / 5),
+    providerSupport: '02',
+    customerSupport: '02',
+    temporaryGoods: '1',
+    mdic: '0',
   };
 }
 

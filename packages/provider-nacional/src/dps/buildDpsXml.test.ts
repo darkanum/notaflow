@@ -112,6 +112,86 @@ describe('buildDpsXml', () => {
   });
 });
 
+describe('buildDpsXml for a service exported to a foreign customer', () => {
+  const exportInput: DpsInput = {
+    ...base,
+    emitterMunicipality: '4113700',
+    provider: {
+      cnpj: '12345678000195',
+      simplesNacional: '3',
+      simplesRegime: '1',
+      specialRegime: '0',
+    },
+    customer: {
+      document: { type: 'NIF', value: '00-0000000' },
+      name: 'Foreign Customer Inc',
+      address: {
+        country: 'US',
+        postalCode: '99999',
+        city: 'Testville',
+        region: 'NY',
+        street: '1 Example Street',
+        number: '1',
+        district: 'Downtown',
+      },
+    },
+    service: {
+      municipality: '4113700',
+      nationalTaxCode: '010701',
+      description: 'Serviços de tecnologia da informação para tomador no exterior',
+      nbsCode: '115080000',
+      foreignTrade: {
+        mode: '1',
+        providerLink: '0',
+        currency: '220',
+        amountInCurrencyCents: 20000,
+        providerSupport: '02',
+        customerSupport: '02',
+        temporaryGoods: '1',
+        mdic: '0',
+      },
+    },
+    amounts: { serviceCents: 100000 },
+    tax: {
+      issqnTaxation: '3',
+      resultCountry: 'US',
+      issRetention: '1',
+      pisCofins: { cst: '00', retention: '0' },
+      simplesTotalPercent: '6.00',
+    },
+    ibsCbs: {
+      purpose: '0',
+      finalConsumer: '0',
+      operationCode: '100302',
+      destination: '0',
+      cst: '410',
+      classCode: '410027',
+    },
+  };
+
+  test('validates against DPS_v1.01.xsd', () => {
+    expect(validateAgainstXsd(buildDpsXml(exportInput).xml, 'DPS_v1.01.xsd').errors).toEqual([]);
+  });
+
+  test('writes the foreign customer, the export group, and the IBS/CBS group', () => {
+    const { xml } = buildDpsXml(exportInput);
+    expect(xml).toContain('<toma><NIF>00-0000000</NIF><xNome>Foreign Customer Inc</xNome>');
+    expect(xml).toContain(
+      '<endExt><cPais>US</cPais><cEndPost>99999</cEndPost><xCidade>Testville</xCidade><xEstProvReg>NY</xEstProvReg></endExt>',
+    );
+    expect(xml).toContain('<comExt><mdPrestacao>1</mdPrestacao>');
+    expect(xml).toContain('<vServMoeda>200.00</vServMoeda>');
+    expect(xml).toContain('<tribISSQN>3</tribISSQN><cPaisResult>US</cPaisResult>');
+    expect(xml).toContain(
+      '<tribFed><piscofins><CST>00</CST><tpRetPisCofins>0</tpRetPisCofins></piscofins></tribFed>',
+    );
+    expect(xml).toContain('<totTrib><pTotTribSN>6.00</pTotTribSN></totTrib>');
+    expect(xml).toContain(
+      '<IBSCBS><finNFSe>0</finNFSe><indFinal>0</indFinal><cIndOp>100302</cIndOp><indDest>0</indDest><valores><trib><gIBSCBS><CST>410</CST><cClassTrib>410027</cClassTrib></gIBSCBS></trib></valores></IBSCBS>',
+    );
+  });
+});
+
 test('the XSD check rejects a DPS with elements out of order', () => {
   const { xml } = buildDpsXml(base);
   const swapped = xml.replace(/(<tpAmb>.*?<\/tpAmb>)(<dhEmi>.*?<\/dhEmi>)/, '$2$1');
