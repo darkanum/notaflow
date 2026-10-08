@@ -1,1 +1,1 @@
-export const CORE_VERSION = '0.0.0';
+export type { CertificateMaterial, SignatureProfile, SignRequest, Signer } from './ports/Signer';
