@@ -3,3 +3,5 @@ export { buildDpsXml, NFSE_NAMESPACE, SCHEMA_VERSION } from './dps/buildDpsXml';
 export type { Address, DpsInput, Environment } from './dps/types';
 export { escapeXml } from './xml/escapeXml';
 export { centsToDecimal, formatBrasiliaDateTime } from './xml/formatters';
+export { buildCancelEventXml } from './events/buildCancelEventXml';
+export type { CancelEventInput, CancelReason } from './events/buildCancelEventXml';
