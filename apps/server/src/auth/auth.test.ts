@@ -67,3 +67,19 @@ test('a mutation that is not JSON is 415 json_required', async () => {
   expect(response.statusCode).toBe(415);
   expect(response.json()).toEqual({ error: 'json_required' });
 });
+
+test('a rejected token is logged with a reason and without the token', async () => {
+  const lines: string[] = [];
+  const logged = await createTestApp({ logStream: { write: (line: string) => lines.push(line) } });
+  const response = await logged.app.inject({
+    method: 'GET',
+    url: '/api/me',
+    headers: { 'cf-access-jwt-assertion': 'not-a-jwt-secret-value' },
+  });
+  await logged.close();
+  expect(response.statusCode).toBe(401);
+  const warning = lines.find((line) => line.includes('access token rejected'));
+  expect(warning).toBeDefined();
+  expect(warning).toContain('"reason"');
+  expect(lines.join(' ')).not.toContain('not-a-jwt-secret-value');
+});

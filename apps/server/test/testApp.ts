@@ -19,7 +19,9 @@ export interface TestApp {
   close(): Promise<void>;
 }
 
-export async function createTestApp(): Promise<TestApp> {
+export async function createTestApp(
+  options: { logStream?: { write(line: string): void } } = {},
+): Promise<TestApp> {
   const fake = await startFakeNacional();
   const { db, close } = openDatabase(':memory:');
   const { publicKey, privateKey } = await generateKeyPair('RS256');
@@ -38,6 +40,7 @@ export async function createTestApp(): Promise<TestApp> {
     config,
     db,
     verifyAccessToken: createAccessVerifier({ issuer: ISSUER, audience: AUDIENCE, jwks }),
+    ...(options.logStream ? { logStream: options.logStream } : {}),
   });
   await app.ready();
 

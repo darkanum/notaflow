@@ -21,12 +21,15 @@ export interface AppDeps {
   config: Config;
   db: Database;
   verifyAccessToken?: VerifyAccessToken;
+  logStream?: { write(line: string): void };
   providerFactory?: ProviderFactory;
 }
 
 export function buildApp(deps: AppDeps): FastifyInstance {
   const { config, db } = deps;
-  const app = Fastify({ logger: config.nodeEnv !== 'test' });
+  const app = Fastify({
+    logger: deps.logStream ? { stream: deps.logStream } : config.nodeEnv !== 'test',
+  });
   const routeList: { method: string; url: string }[] = [];
   app.decorate('routeList', routeList);
   app.addHook('onRoute', (route) => {

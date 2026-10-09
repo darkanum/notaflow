@@ -48,7 +48,11 @@ async function emailOf(
   if (typeof token !== 'string' || token === '') throw new HttpError(401, 'unauthenticated');
   try {
     return await verify(token);
-  } catch {
+  } catch (error) {
+    request.log.warn(
+      { reason: (error as { code?: string }).code ?? (error as Error).name },
+      'access token rejected',
+    );
     throw new HttpError(401, 'unauthenticated');
   }
 }
