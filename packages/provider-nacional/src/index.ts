@@ -17,6 +17,7 @@ export { createMtlsDispatcher } from './http/createMtlsDispatcher';
 export { ENDPOINTS } from './http/endpoints';
 export { gunzipBase64, gzipBase64 } from './http/gzipBase64';
 export { NacionalClient, NacionalHttpError } from './http/NacionalClient';
+export { NacionalProvider } from './NacionalProvider';
 export type {
   DfeBatch,
   DfeDocument,

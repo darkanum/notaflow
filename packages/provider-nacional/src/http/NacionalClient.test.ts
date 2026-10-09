@@ -40,6 +40,19 @@ test('createMtlsDispatcher builds an Agent from PEM material', () => {
   );
 });
 
+test('the urls option sends requests to another host', async () => {
+  const local = new NacionalClient({
+    environment: 'producao_restrita',
+    dispatcher: agent,
+    urls: { sefin: 'http://127.0.0.1:4010/SefinNacional', adn: 'http://127.0.0.1:4010/adn' },
+  });
+  agent
+    .get('http://127.0.0.1:4010')
+    .intercept({ path: '/adn/parametrizacao/3550308/convenio', method: 'GET' })
+    .reply(200, { mensagem: 'ok' });
+  expect(await local.checkConvenio('3550308')).toEqual({ mensagem: 'ok' });
+});
+
 describe('mTLS handshake', () => {
   const server = makeTestCertificate({ altNames: [{ ip: '127.0.0.1' }] });
   const clientCert = makeTestCertificate({ cnpj: '12345678000195' });
@@ -350,6 +363,26 @@ describe('fetchDfe', () => {
       documents: [],
       errors: [],
     });
+  });
+
+  test('a document with a corrupt ArquivoXml keeps the batch, with an empty xml', async () => {
+    agent
+      .get(ADN)
+      .intercept({ path: DFE_PATH(0), method: 'GET' })
+      .reply(200, {
+        StatusProcessamento: 'DOCUMENTOS_LOCALIZADOS',
+        LoteDFe: [
+          {
+            NSU: 1,
+            ChaveAcesso: KEY,
+            TipoDocumento: 'NFSE',
+            ArquivoXml: 'not-gzip',
+            DataHoraGeracao: '2026-10-01T10:00:00',
+          },
+        ],
+        Erros: [],
+      });
+    expect((await client.fetchDfe(0, '12345678000195')).documents[0]?.xml).toBe('');
   });
 
   test('429 throws a retryable error', async () => {
