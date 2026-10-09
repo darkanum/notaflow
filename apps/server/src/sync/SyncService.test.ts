@@ -105,7 +105,8 @@ test('the cursor of producao does not reuse the cursor of producao_restrita', as
   await service.syncEmitter(ctx, emitterId);
   new EmitterRepository(db).setEnvironment(ctx, emitterId, 'producao');
   const production = await service.syncEmitter(ctx, emitterId);
-  expect(production).toMatchObject({ environment: 'producao', lastNsu: 2 });
+  // Read from NSU 0 again: reusing the restrita cursor (2) would fetch nothing.
+  expect(production).toMatchObject({ environment: 'producao', invoices: 2, lastNsu: 2 });
   expect(new SyncStateRepository(db).get(ctx, emitterId, 'producao_restrita').lastNsu).toBe(2);
 });
 
