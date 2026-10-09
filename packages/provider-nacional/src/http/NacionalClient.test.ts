@@ -327,6 +327,20 @@ describe('registerEvent', () => {
     });
   });
 
+  test('400 with erro as an array (the real Sefin, seen in the Stage 1b acceptance) returns the first error', async () => {
+    agent
+      .get(SEFIN)
+      .intercept({ path: `/SefinNacional/nfse/${KEY}/eventos`, method: 'POST' })
+      .reply(400, {
+        tipoAmbiente: 2,
+        erro: [{ codigo: 'E0840', descricao: 'Evento de cancelamento já vinculado à NFS-e' }],
+      });
+    expect(await client.registerEvent(KEY, '<x/>')).toEqual({
+      kind: 'rejected',
+      error: { codigo: 'E0840', descricao: 'Evento de cancelamento já vinculado à NFS-e' },
+    });
+  });
+
   test('400 with an erros array returns the first error', async () => {
     agent
       .get(SEFIN)

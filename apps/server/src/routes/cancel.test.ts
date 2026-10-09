@@ -59,3 +59,17 @@ test('a justification that is short after trimming is 400 invalid_justification'
   });
   expect(response.json()).toEqual({ error: 'invalid_justification' });
 });
+
+test('a cancel refused because the invoice is already cancelled marks it cancelled', async () => {
+  const { a, headers, templateInvoiceId } = await withTemplate(t);
+  t.fake.next('event', { kind: 'reply', status: 400, body: { erro: { Codigo: 'E0840', Descricao: 'NFS-e já cancelada.' } } });
+  const response = await t.app.inject({
+    method: 'POST',
+    url: `/api/accounts/${a.accountId}/invoices/${templateInvoiceId}/cancel`,
+    headers,
+    payload: { reason: '1', justification: 'Valor do serviço incorreto' },
+  });
+  expect(response.json()).toEqual({ id: templateInvoiceId, status: 'cancelled', alreadyCancelled: true });
+  const detail = await t.app.inject({ method: 'GET', url: `/api/accounts/${a.accountId}/invoices/${templateInvoiceId}`, headers });
+  expect(detail.json()).toMatchObject({ status: 'cancelled' });
+});

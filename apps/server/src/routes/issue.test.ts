@@ -186,3 +186,45 @@ test('a direct issue is ours even when the Sefin normalizes the description', as
   });
   expect(response.json()).toMatchObject({ status: 'issued' });
 });
+
+test('the same Idempotency-Key twice issues once and answers the same invoice', async () => {
+  const { a, headers, templateInvoiceId } = await withTemplate(t);
+  const request = {
+    method: 'POST' as const,
+    url: `/api/accounts/${a.accountId}/invoices/issue`,
+    headers: { ...headers, 'idempotency-key': 'form-0001-abcdef' },
+    payload: { templateInvoiceId, competence: '2026-09-30', serviceCents: 670321, foreignAmountCents: 123400 },
+  };
+  const first = await t.app.inject(request);
+  const second = await t.app.inject(request);
+  expect(first.statusCode).toBe(201);
+  expect(second.statusCode).toBe(200);
+  expect(second.json()).toEqual(first.json());
+  const list = await t.app.inject({ method: 'GET', url: `/api/accounts/${a.accountId}/invoices`, headers });
+  expect(list.json()).toMatchObject({ total: 2 });
+});
+
+test('two requests with one key at the same time make one invoice', async () => {
+  const { a, headers, templateInvoiceId } = await withTemplate(t);
+  const request = {
+    method: 'POST' as const,
+    url: `/api/accounts/${a.accountId}/invoices/issue`,
+    headers: { ...headers, 'idempotency-key': 'form-0002-abcdef' },
+    payload: { templateInvoiceId, competence: '2026-09-30', serviceCents: 100, foreignAmountCents: 20 },
+  };
+  const [one, two] = await Promise.all([t.app.inject(request), t.app.inject(request)]);
+  expect(one.json().id).toBe(two.json().id);
+  const list = await t.app.inject({ method: 'GET', url: `/api/accounts/${a.accountId}/invoices`, headers });
+  expect(list.json()).toMatchObject({ total: 2 });
+});
+
+test('a malformed Idempotency-Key is 400', async () => {
+  const { a, headers, templateInvoiceId } = await withTemplate(t);
+  const response = await t.app.inject({
+    method: 'POST',
+    url: `/api/accounts/${a.accountId}/invoices/issue`,
+    headers: { ...headers, 'idempotency-key': 'x' },
+    payload: { templateInvoiceId, competence: '2026-09-30', serviceCents: 100, foreignAmountCents: 20 },
+  });
+  expect(response.json()).toEqual({ error: 'invalid_idempotency_key' });
+});

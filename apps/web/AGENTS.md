@@ -1,6 +1,6 @@
 # Web: AI Context
 
-The React UI, built with Vite. It talks only to the server API under `/api`.
+The React UI, built with Vite and styled with the Malphas design system. It talks only to the server API under `/api`. See [Web UI](../../docs/ENGINEERING/ARCHITECTURE/WEB_UI.md).
 
 ## Quick Reference
 
@@ -14,3 +14,4 @@ The React UI, built with Vite. It talks only to the server API under `/api`.
 2. Amounts arrive in cents; format them only with `formatCents`.
 3. Every API error code has a message in `ERROR_TEXT` (`src/components/Layout.tsx`).
 4. The environment badge is always visible where an emitter or invoice is shown.
+5. Use the components in `src/ui`; never a raw color. Do not edit `src/malphas/` (copied from Malphas; see its `SOURCE.md`).

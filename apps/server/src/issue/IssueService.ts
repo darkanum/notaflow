@@ -31,9 +31,12 @@ export interface IssueInput {
   customerId?: string;
 }
 
+// Sefin refusals that mean the invoice is already cancelled (E0840, confirmed in the Stage 1b acceptance).
+export const ALREADY_CANCELLED_CODES = ['E0840'];
+
 export interface IssueResultView {
   id: string;
-  status: 'issued' | 'rejected' | 'unknown';
+  status: 'pending' | 'issued' | 'rejected' | 'unknown' | 'cancelled';
   number?: string;
   accessKey?: string;
   errors?: { code: string; message: string }[];
@@ -79,14 +82,29 @@ export class IssueService {
     };
   }
 
-  async issue(ctx: AccountContext, actor: string, input: IssueInput): Promise<IssueResultView> {
+  async issue(
+    ctx: AccountContext,
+    actor: string,
+    input: IssueInput,
+    idempotencyKey?: string,
+  ): Promise<{ view: IssueResultView; repeat: boolean }> {
     const { state, xml, template } = this.loadTemplate(ctx, input.templateInvoiceId);
+    const repeated = () =>
+      idempotencyKey
+        ? this.invoices.findByIdempotencyKey(ctx, state.emitterId, idempotencyKey)
+        : null;
+    const earlier = repeated();
+    if (earlier) return { view: this.view(ctx, earlier), repeat: true };
     if (input.serviceCents <= 0) throw new HttpError(400, 'invalid_amount');
-    if (template.service.foreignTrade && !(input.foreignAmountCents && input.foreignAmountCents > 0)) {
+    if (
+      template.service.foreignTrade &&
+      !(input.foreignAmountCents && input.foreignAmountCents > 0)
+    ) {
       throw new HttpError(400, 'invalid_amount');
     }
     const now = this.now();
-    if (input.competence > formatBrasiliaDate(now)) throw new HttpError(400, 'competence_after_issue');
+    if (input.competence > formatBrasiliaDate(now))
+      throw new HttpError(400, 'competence_after_issue');
     const customer = input.customerId ? this.customerParty(ctx, input.customerId) : undefined;
     if (customer && !customer.document) throw new HttpError(400, 'customer_without_document');
     const emitter = this.emitters.get(ctx, state.emitterId);
@@ -98,6 +116,9 @@ export class IssueService {
     const templateCustomer = template.customer;
     const description = input.description ?? template.service.description;
     const pending = this.deps.db.transaction(() => {
+      // A second request with the same key may have passed the first check while this one awaited.
+      const raced = repeated();
+      if (raced) return { id: raced, number: null };
       const number = this.emitters.reserveDpsNumber(ctx, emitter.id);
       const id = this.invoices.createPending(ctx, {
         emitterId: emitter.id,
@@ -115,6 +136,7 @@ export class IssueService {
         environment: emitter.environment,
         templateOf: input.templateInvoiceId,
         createdBy: ctx.userId,
+        ...(idempotencyKey ? { idempotencyKey } : {}),
       });
       this.audit.record({
         userEmail: actor,
@@ -126,6 +148,7 @@ export class IssueService {
       });
       return { id, number };
     });
+    if (pending.number === null) return { view: this.view(ctx, pending.id), repeat: true };
 
     const outcome = await this.send(issuer, {
       templateXml: xml,
@@ -139,13 +162,34 @@ export class IssueService {
       description,
       ...(customer ? { customer } : {}),
     });
-    return this.record(ctx, actor, 'invoice.issue', pending.id, emitter.id, outcome);
+    return {
+      view: this.record(ctx, actor, 'invoice.issue', pending.id, emitter.id, outcome),
+      repeat: false,
+    };
+  }
+
+  private view(ctx: AccountContext, invoiceId: string): IssueResultView {
+    const row = this.invoices.issueView(ctx, invoiceId);
+    if (!row) throw new HttpError(404, 'not_found');
+    const errors =
+      row.status === 'rejected' ? (row.sefinMessages as IssueResultView['errors']) : undefined;
+    return {
+      id: invoiceId,
+      status: row.status,
+      ...(row.number ? { number: row.number } : {}),
+      ...(row.accessKey ? { accessKey: row.accessKey } : {}),
+      ...(errors ? { errors } : {}),
+    };
   }
 
   async reconcile(ctx: AccountContext, actor: string, invoiceId: string): Promise<IssueResultView> {
     const state = this.invoices.issueState(ctx, invoiceId);
     if (!state) throw new HttpError(404, 'not_found');
-    if ((state.status !== 'unknown' && state.status !== 'pending') || !state.dpsId || !state.templateOf) {
+    if (
+      (state.status !== 'unknown' && state.status !== 'pending') ||
+      !state.dpsId ||
+      !state.templateOf
+    ) {
       throw new HttpError(409, 'not_unknown');
     }
     const template = this.loadTemplate(ctx, state.templateOf);
@@ -160,10 +204,18 @@ export class IssueService {
     try {
       found = await issuer.findIssued(state.dpsId);
     } catch (error) {
-      throw new HttpError(502, 'sefin_unavailable', error instanceof Error ? error.message : String(error));
+      throw new HttpError(
+        502,
+        'sefin_unavailable',
+        error instanceof Error ? error.message : String(error),
+      );
     }
     if (found) {
-      return this.record(ctx, actor, 'invoice.reconcile', invoiceId, emitter.id, { kind: 'issued', invoice: found, recovered: true });
+      return this.record(ctx, actor, 'invoice.reconcile', invoiceId, emitter.id, {
+        kind: 'issued',
+        invoice: found,
+        recovered: true,
+      });
     }
     // Only now is a resend safe, and it reuses the same DPS number.
     this.audit.record({
@@ -199,7 +251,7 @@ export class IssueService {
     invoiceId: string,
     reason: '1' | '2' | '9',
     justification: string,
-  ): Promise<{ id: string; status: 'cancelled' }> {
+  ): Promise<{ id: string; status: 'cancelled'; alreadyCancelled?: true }> {
     const invoice = this.invoices.get(ctx, invoiceId);
     if (!invoice) throw new HttpError(404, 'not_found');
     if (invoice.status !== 'issued' || !invoice.accessKey) throw new HttpError(409, 'not_issued');
@@ -226,6 +278,12 @@ export class IssueService {
       const message = error instanceof Error ? error.message : String(error);
       audit('error', message);
       throw new HttpError(502, 'sefin_unavailable', message);
+    }
+    if (outcome.kind === 'rejected' && ALREADY_CANCELLED_CODES.includes(outcome.error.code)) {
+      // The first cancel reached the Sefin, even if its answer did not reach us.
+      this.invoices.markCancelled(ctx, invoiceId);
+      audit('ok', 'already cancelled at the Sefin');
+      return { id: invoiceId, status: 'cancelled', alreadyCancelled: true };
     }
     if (outcome.kind === 'rejected') {
       audit('refused', `${outcome.error.code} ${outcome.error.message}`);
@@ -265,7 +323,14 @@ export class IssueService {
     outcome: IssueOutcome,
   ): IssueResultView {
     const audit = (result: 'ok' | 'refused' | 'error', detail: string) =>
-      this.audit.record({ userEmail: actor, accountId: ctx.accountId, action, entity: invoiceId, result, detail });
+      this.audit.record({
+        userEmail: actor,
+        accountId: ctx.accountId,
+        action,
+        entity: invoiceId,
+        result,
+        detail,
+      });
     if (outcome.kind === 'issued') {
       const { invoice } = outcome;
       // E0014 on a fresh number means another system used it; its invoice is not ours.
@@ -282,7 +347,12 @@ export class IssueService {
         if (invoice.customer) this.customers.upsertImported(ctx, emitterId, invoice.customer);
       });
       audit('ok', `issued ${invoice.accessKey}`);
-      return { id: invoiceId, status: 'issued', number: invoice.number, accessKey: invoice.accessKey };
+      return {
+        id: invoiceId,
+        status: 'issued',
+        number: invoice.number,
+        accessKey: invoice.accessKey,
+      };
     }
     if (outcome.kind === 'rejected') {
       this.invoices.markRejected(ctx, invoiceId, outcome.errors);
@@ -297,7 +367,10 @@ export class IssueService {
   private loadTemplate(ctx: AccountContext, invoiceId: string) {
     const state = this.invoices.issueState(ctx, invoiceId);
     if (!state) throw new HttpError(404, 'not_found');
-    const xml = state.status === 'issued' || state.status === 'cancelled' ? this.invoices.xml(ctx, invoiceId) : null;
+    const xml =
+      state.status === 'issued' || state.status === 'cancelled'
+        ? this.invoices.xml(ctx, invoiceId)
+        : null;
     if (!xml) throw new HttpError(409, 'template_not_issued');
     let template: DpsTemplate;
     try {
@@ -324,7 +397,10 @@ export class IssueService {
 
 export function partyOf(row: CustomerRow): InvoiceParty {
   return {
-    document: row.documentType === 'NONE' || !row.document ? null : { type: row.documentType, value: row.document },
+    document:
+      row.documentType === 'NONE' || !row.document
+        ? null
+        : { type: row.documentType, value: row.document },
     name: row.name,
     ...(row.municipalRegistration ? { municipalRegistration: row.municipalRegistration } : {}),
     ...(row.address ? { address: row.address as PartyAddress } : {}),

@@ -5,6 +5,7 @@ import { EnvironmentBadge } from '../components/EnvironmentBadge';
 import { Layout, errorText } from '../components/Layout';
 import { useAsync } from '../components/useAsync';
 import { fileToBase64, formatDate } from '../format';
+import { Alert, Button, buttonClasses, Card, SECTION_TITLE_CLASSES } from '../ui';
 import { OnboardingForm } from './OnboardingForm';
 
 type Act = (action: () => Promise<string>) => Promise<void>;
@@ -27,9 +28,9 @@ export function EmittersPage({ accountId }: { accountId: string }) {
   };
 
   return (
-    <Layout title="Emitentes">
-      {message && <p className="message">{message}</p>}
-      {emitters.error && <p className="error">{errorText(emitters.error)}</p>}
+    <Layout title="Emitentes" accountId={accountId}>
+      {message && <Alert variant="info">{message}</Alert>}
+      {emitters.error && <Alert variant="error">{errorText(emitters.error)}</Alert>}
       {emitters.data?.map((emitter) => (
         <EmitterCard key={emitter.id} base={base} emitter={emitter} isOwner={isOwner} act={act} />
       ))}
@@ -86,23 +87,30 @@ function EmitterCard(props: { base: string; emitter: Emitter; isOwner: boolean; 
   }
 
   return (
-    <section className="card">
-      <h2>
-        {emitter.companyName} <small>{emitter.cnpj}</small>
-      </h2>
-      <EnvironmentBadge environment={emitter.environment} />
+    <Card className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className={SECTION_TITLE_CLASSES + ' mb-0'}>
+          {emitter.companyName}{' '}
+          <small className="text-sm font-normal text-muted">{emitter.cnpj}</small>
+        </h2>
+        <EnvironmentBadge environment={emitter.environment} />
+      </div>
       <CertificateWarning certificate={emitter.certificate} />
       {sync.data && (
-        <p>
+        <p className="text-sm text-muted">
           Última sincronização: {formatDate(sync.data.lastSuccessAt) || 'nunca'}
-          {sync.data.lastError && <span className="error"> (erro: {sync.data.lastError})</span>}
+          {sync.data.lastError && (
+            <span className="text-danger"> (erro: {sync.data.lastError})</span>
+          )}
         </p>
       )}
-      <div className="actions">
-        <button onClick={syncNow}>Sincronizar agora</button>
+      <div className="flex flex-wrap gap-3">
+        <Button variant="secondary" onClick={syncNow}>
+          Sincronizar agora
+        </Button>
         {isOwner && (
           <>
-            <label className="button">
+            <label className={`${buttonClasses({ variant: 'secondary' })} cursor-pointer`}>
               Trocar certificado
               <input
                 type="file"
@@ -114,14 +122,17 @@ function EmitterCard(props: { base: string; emitter: Emitter; isOwner: boolean; 
                 }}
               />
             </label>
-            <button onClick={switchEnvironment}>
+            <Button
+              variant={emitter.environment === 'producao' ? 'secondary' : 'danger'}
+              onClick={switchEnvironment}
+            >
               {emitter.environment === 'producao'
                 ? 'Voltar para produção restrita'
                 : 'Passar para PRODUÇÃO'}
-            </button>
+            </Button>
           </>
         )}
       </div>
-    </section>
+    </Card>
   );
 }

@@ -191,7 +191,9 @@ export class NacionalClient {
     // The event exists once the Sefin answers 201, even when its XML is unreadable.
     if (status === 201) return { kind: 'registered', eventXml: tryGunzip(data.eventoXmlGZipB64) };
     if (status === 400 || status === 401) {
-      const raw = Array.isArray(data.erros) ? data.erros[0] : data.erro;
+      // The real Sefin sends erro as an array (Stage 1b acceptance); erros and a single object also occur in docs.
+      const list = Array.isArray(data.erro) ? data.erro : Array.isArray(data.erros) ? data.erros : null;
+      const raw = list ? list[0] : data.erro;
       return { kind: 'rejected', error: sefinError(raw) };
     }
     throw httpError(status, body);

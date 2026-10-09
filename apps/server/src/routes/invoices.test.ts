@@ -72,6 +72,7 @@ test('lists synced invoices with paging and returns the detail and the XML', asy
     headers,
   });
   expect(detail.json()).toMatchObject({ id, status: 'issued', events: [] });
+  expect(detail.json()).toMatchObject({ sefinMessages: null, templateOf: null });
 
   const xml = await t.app.inject({
     method: 'GET',

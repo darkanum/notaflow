@@ -3,7 +3,15 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['**/node_modules/**', '**/dist/**', 'services/**', '.superpowers/**', '.remember/**'],
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      'services/**',
+      '.superpowers/**',
+      '.remember/**',
+      // Copied from the Malphas design system; see its SOURCE.md.
+      'apps/web/src/malphas/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -18,6 +26,22 @@ export default tseslint.config(
         HashChangeEvent: 'readonly',
       },
     },
+  },
+  {
+    files: ['**/*.cjs', '**/*.mjs'],
+    languageOptions: {
+      globals: {
+        require: 'readonly',
+        module: 'writable',
+        process: 'readonly',
+        Buffer: 'readonly',
+        console: 'readonly',
+      },
+    },
+  },
+  {
+    files: ['**/*.cjs'],
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
   {
     rules: {

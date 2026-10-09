@@ -3,6 +3,23 @@ import { type AdminAccount, api, type AuditEntry } from '../api';
 import { Layout, errorText } from '../components/Layout';
 import { useAsync } from '../components/useAsync';
 import { formatDate } from '../format';
+import {
+  Alert,
+  Badge,
+  Button,
+  CARD_CLASSES,
+  Card,
+  Field,
+  FORM_CLASSES,
+  Input,
+  SECTION_TITLE_CLASSES,
+  Select,
+  Table,
+  TBody,
+  TD,
+  TH,
+  THead,
+} from '../ui';
 
 type Act = (action: () => Promise<string>) => Promise<void>;
 
@@ -31,42 +48,46 @@ export function AdminPage() {
 
   return (
     <Layout title="Painel do administrador">
-      {message && <p className="message">{message}</p>}
-      {accounts.error && <p className="error">{errorText(accounts.error)}</p>}
-      <table>
-        <thead>
+      {message && <Alert variant="info">{message}</Alert>}
+      {accounts.error && <Alert variant="error">{errorText(accounts.error)}</Alert>}
+      <Table>
+        <THead>
           <tr>
-            <th>Conta</th>
-            <th>Situação</th>
-            <th>Membros</th>
-            <th>Id</th>
-            <th />
+            <TH>Conta</TH>
+            <TH>Situação</TH>
+            <TH>Membros</TH>
+            <TH>Id</TH>
+            <TH />
           </tr>
-        </thead>
-        <tbody>
+        </THead>
+        <TBody>
           {accounts.data?.map((account) => (
             <tr key={account.id}>
-              <td>{account.name}</td>
-              <td>{account.status === 'active' ? 'Ativa' : 'Suspensa'}</td>
-              <td>{account.members}</td>
-              <td>
-                <code>{account.id}</code>
-              </td>
-              <td>
-                <button onClick={() => toggle(account)}>
+              <TD>{account.name}</TD>
+              <TD>
+                <Badge variant={account.status === 'active' ? 'success' : 'warning'}>
+                  {account.status === 'active' ? 'Ativa' : 'Suspensa'}
+                </Badge>
+              </TD>
+              <TD>{account.members}</TD>
+              <TD>
+                <code className="font-mono text-xs">{account.id}</code>
+              </TD>
+              <TD>
+                <Button size="sm" variant="secondary" onClick={() => toggle(account)}>
                   {account.status === 'active' ? 'Suspender' : 'Reativar'}
-                </button>
-              </td>
+                </Button>
+              </TD>
             </tr>
           ))}
-        </tbody>
-      </table>
+        </TBody>
+      </Table>
       <NewAccountForm act={act} />
       <NewUserForm act={act} />
       <SetMemberForm act={act} />
-      <section className="card">
-        <h2>Auditoria (últimas 100)</h2>
-        <ul>
+      <Card>
+        <h2 className={SECTION_TITLE_CLASSES}>Auditoria (últimas 100)</h2>
+        <ul className="flex flex-col gap-1 text-sm">
           {audit.data?.map((entry) => (
             <li key={entry.id}>
               {formatDate(entry.at)} {entry.userEmail}: {entry.action} {entry.entity} (
@@ -74,7 +95,7 @@ export function AdminPage() {
             </li>
           ))}
         </ul>
-      </section>
+      </Card>
     </Layout>
   );
 }
@@ -90,13 +111,16 @@ function NewAccountForm({ act }: { act: Act }) {
     });
   }
   return (
-    <form onSubmit={submit} className="card">
-      <h2>Nova conta</h2>
-      <label>
-        Nome
-        <input required value={name} onChange={(e) => setName(e.target.value)} />
-      </label>
-      <button type="submit">Criar conta</button>
+    <form onSubmit={submit} className={`${CARD_CLASSES} ${FORM_CLASSES}`}>
+      <h2 className={SECTION_TITLE_CLASSES}>Nova conta</h2>
+      <Field label="Nome">
+        <Input required value={name} onChange={(e) => setName(e.target.value)} />
+      </Field>
+      <div>
+        <Button type="submit" variant="primary">
+          Criar conta
+        </Button>
+      </div>
     </form>
   );
 }
@@ -119,21 +143,28 @@ function NewUserForm({ act }: { act: Act }) {
     });
   }
   return (
-    <form onSubmit={submit} className="card">
-      <h2>Novo usuário</h2>
-      <label>
-        E-mail
-        <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-      </label>
-      <label>
-        Nome
-        <input required value={name} onChange={(e) => setName(e.target.value)} />
-      </label>
-      <label>
-        <input type="checkbox" checked={admin} onChange={(e) => setAdmin(e.target.checked)} />{' '}
+    <form onSubmit={submit} className={`${CARD_CLASSES} ${FORM_CLASSES}`}>
+      <h2 className={SECTION_TITLE_CLASSES}>Novo usuário</h2>
+      <Field label="E-mail">
+        <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+      </Field>
+      <Field label="Nome">
+        <Input required value={name} onChange={(e) => setName(e.target.value)} />
+      </Field>
+      <label className="flex items-center text-sm text-fg">
+        <input
+          className="mr-2 accent-primary"
+          type="checkbox"
+          checked={admin}
+          onChange={(e) => setAdmin(e.target.checked)}
+        />{' '}
         Administrador da plataforma
       </label>
-      <button type="submit">Criar usuário</button>
+      <div>
+        <Button type="submit" variant="primary">
+          Criar usuário
+        </Button>
+      </div>
     </form>
   );
 }
@@ -153,24 +184,25 @@ function SetMemberForm({ act }: { act: Act }) {
     });
   }
   return (
-    <form onSubmit={submit} className="card">
-      <h2>Vincular usuário a uma conta</h2>
-      <label>
-        Id da conta
-        <input required value={accountId} onChange={(e) => setAccountId(e.target.value)} />
-      </label>
-      <label>
-        Id do usuário
-        <input required value={userId} onChange={(e) => setUserId(e.target.value)} />
-      </label>
-      <label>
-        Papel
-        <select value={role} onChange={(e) => setRole(e.target.value as 'owner' | 'member')}>
+    <form onSubmit={submit} className={`${CARD_CLASSES} ${FORM_CLASSES}`}>
+      <h2 className={SECTION_TITLE_CLASSES}>Vincular usuário a uma conta</h2>
+      <Field label="Id da conta">
+        <Input required value={accountId} onChange={(e) => setAccountId(e.target.value)} />
+      </Field>
+      <Field label="Id do usuário">
+        <Input required value={userId} onChange={(e) => setUserId(e.target.value)} />
+      </Field>
+      <Field label="Papel">
+        <Select value={role} onChange={(e) => setRole(e.target.value as 'owner' | 'member')}>
           <option value="owner">Dono</option>
           <option value="member">Membro</option>
-        </select>
-      </label>
-      <button type="submit">Salvar</button>
+        </Select>
+      </Field>
+      <div>
+        <Button type="submit" variant="primary">
+          Salvar
+        </Button>
+      </div>
     </form>
   );
 }

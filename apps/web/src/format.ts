@@ -30,3 +30,41 @@ export function fileToBase64(file: Blob): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+const brasiliaIso = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Sao_Paulo',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+export function brasiliaToday(now: Date = new Date()): string {
+  return brasiliaIso.format(now);
+}
+
+// The usual competence: the last day of the month before the issue.
+export function previousMonthEnd(today: string): string {
+  const [year, month] = today.split('-').map(Number);
+  const end = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, 0));
+  return end.toISOString().slice(0, 10);
+}
+
+// Accepts "1.234,56" (Brazilian) and "1234.56"; anything else is null.
+export function parseCents(text: string): number | null {
+  const value = text.trim();
+  const brazilian = /^\d{1,3}(\.\d{3})*(,\d{1,2})?$|^\d+(,\d{1,2})?$/.test(value);
+  const plain = /^\d+(\.\d{1,2})?$/.test(value);
+  if (!brazilian && !plain) return null;
+  const normalized = brazilian && !plain ? value.replace(/\./g, '').replace(',', '.') : value;
+  const [whole = '0', fraction = ''] = normalized.split('.');
+  return Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+}
+
+const plainAmount = new Intl.NumberFormat('pt-BR', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+export function centsInput(cents: number): string {
+  return plainAmount.format(cents / 100);
+}
