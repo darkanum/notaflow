@@ -19,7 +19,7 @@ test('the certificate warning shows only when the certificate expires soon or is
   );
   expect(container.textContent).toBe('');
   render(
-    <CertificateWarning certificate={{ validTo: '2026-10-20T00:00:00Z', expiresSoon: true }} />,
+    <CertificateWarning certificate={{ validTo: '2026-10-20T15:00:00Z', expiresSoon: true }} />,
   );
   expect(screen.getByText(/vence em 20\/10\/2026/)).toBeTruthy();
   render(<CertificateWarning certificate={null} />);

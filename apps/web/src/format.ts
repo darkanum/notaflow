@@ -4,11 +4,17 @@ export function formatCents(cents: number): string {
   return money.format(cents / 100);
 }
 
-// Slices the ISO string so the browser's time zone never moves the day.
+// Timestamps arrive in UTC; the day that matters to the user is the Brasília day.
+const brasiliaDay = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: 'America/Sao_Paulo',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+});
+
 export function formatDate(value: string | null): string {
   if (!value) return '';
-  const [year, month, day] = value.slice(0, 10).split('-');
-  return `${day}/${month}/${year}`;
+  return brasiliaDay.format(new Date(value));
 }
 
 export function formatCompetence(value: string): string {
