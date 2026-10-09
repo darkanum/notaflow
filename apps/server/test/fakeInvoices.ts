@@ -69,7 +69,7 @@ export const exportInput: DpsInput = {
       mdic: '0',
     },
   },
-  amounts: { serviceCents: 1036320 },
+  amounts: { serviceCents: 1086420 },
   tax: {
     issqnTaxation: '3',
     resultCountry: 'US',

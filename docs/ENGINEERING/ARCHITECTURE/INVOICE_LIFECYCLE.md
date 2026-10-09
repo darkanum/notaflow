@@ -50,7 +50,7 @@ For an export invoice, the BRL amount is suggested from the PTAX **sell** rate o
 
 Evidence: one real export invoice of the first emitter used exactly this rate. Two earlier ones match no PTAX closing rate, probably a bank contract rate. That is why the amount stays editable.
 
-`GET /api/accounts/:accountId/exchange-rate?currency=220&date=YYYY-MM-DD` returns the rate. Rates are integers scaled by 10 000 (`51816` for 5.1816), so no float touches money.
+`GET /api/accounts/:accountId/exchange-rate?currency=220&date=YYYY-MM-DD` returns the rate. Rates are integers scaled by 10 000 (`54321` for 5.4321), so no float touches money.
 
 ## Customers
 

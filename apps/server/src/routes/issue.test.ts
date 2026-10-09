@@ -23,7 +23,7 @@ test('the draft copies the template and marks it as an export', async () => {
   });
   expect(draft.json()).toMatchObject({
     templateInvoiceId,
-    serviceCents: 1036320,
+    serviceCents: 1086420,
     foreign: { currency: 'USD', amountCents: 200000 },
     customer: { document: { type: 'NIF' } },
   });
@@ -38,8 +38,8 @@ test('issue similar: pending, then issued with a new DPS number and the new amou
     payload: {
       templateInvoiceId,
       competence: '2026-09-30',
-      serviceCents: 1813560,
-      foreignAmountCents: 350000,
+      serviceCents: 670321,
+      foreignAmountCents: 123400,
       description: 'Serviços de setembro',
     },
   });
@@ -53,7 +53,7 @@ test('issue similar: pending, then issued with a new DPS number and the new amou
   });
   expect(detail.json()).toMatchObject({
     status: 'issued',
-    serviceCents: 1813560,
+    serviceCents: 670321,
     description: 'Serviços de setembro',
     origin: 'app',
   });
@@ -124,7 +124,7 @@ test('a DPS number used outside the app is never taken as the new invoice', asyn
     method: 'POST',
     url: `/api/accounts/${a.accountId}/invoices/issue`,
     headers,
-    payload: { templateInvoiceId, competence: '2026-09-30', serviceCents: 1813560, foreignAmountCents: 350000 },
+    payload: { templateInvoiceId, competence: '2026-09-30', serviceCents: 670321, foreignAmountCents: 123400 },
   });
   expect(response.json()).toMatchObject({ status: 'rejected', errors: [{ code: 'E0014' }] });
 });
@@ -135,7 +135,7 @@ test('the exchange rate route returns the PTAX sell closing rate', async () => {
   ptax
     .get('https://olinda.bcb.gov.br')
     .intercept({ path: (p) => p.includes('08-31-2026'), method: 'GET' })
-    .reply(200, { value: [{ tipoBoletim: 'Fechamento PTAX', cotacaoVenda: 5.1816, cotacaoCompra: 5.181 }] });
+    .reply(200, { value: [{ tipoBoletim: 'Fechamento PTAX', cotacaoVenda: 5.4321, cotacaoCompra: 5.181 }] });
   const own = await createTestApp({ ptaxDispatcher: ptax });
   const a = seedTenant(own.db, { accountName: 'A', email: 'x@example.com' });
   const response = await own.app.inject({
@@ -147,8 +147,8 @@ test('the exchange rate route returns the PTAX sell closing rate', async () => {
   expect(response.json()).toEqual({
     currency: 'USD',
     date: '2026-08-31',
-    rate: '5.1816',
-    rateE4: 51816,
+    rate: '5.4321',
+    rateE4: 54321,
     source: 'PTAX venda, fechamento',
   });
 });
@@ -158,14 +158,31 @@ test('a DPS number used outside the app for the same amount but another customer
   await issueExportOnFake(t.fake, {
     number: 7,
     competence: '2026-09-30',
-    amounts: { serviceCents: 1813560 },
+    amounts: { serviceCents: 670321 },
     customer: { document: { type: 'NIF', value: '99-9999999' }, name: 'Another Customer LLC' },
   });
   const response = await t.app.inject({
     method: 'POST',
     url: `/api/accounts/${a.accountId}/invoices/issue`,
     headers,
-    payload: { templateInvoiceId, competence: '2026-09-30', serviceCents: 1813560, foreignAmountCents: 200000 },
+    payload: { templateInvoiceId, competence: '2026-09-30', serviceCents: 670321, foreignAmountCents: 200000 },
   });
   expect(response.json()).toMatchObject({ status: 'rejected', errors: [{ code: 'E0014' }] });
+});
+
+test('a direct issue is ours even when the Sefin normalizes the description', async () => {
+  const { a, headers, templateInvoiceId } = await withTemplate(t);
+  const response = await t.app.inject({
+    method: 'POST',
+    url: `/api/accounts/${a.accountId}/invoices/issue`,
+    headers,
+    payload: {
+      templateInvoiceId,
+      competence: '2026-09-30',
+      serviceCents: 670321,
+      foreignAmountCents: 123400,
+      description: 'Linha 1\r\nLinha 2 ',
+    },
+  });
+  expect(response.json()).toMatchObject({ status: 'issued' });
 });

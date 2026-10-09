@@ -26,8 +26,8 @@ const request = (number: number) => ({
   number,
   issuedAt: new Date(Date.now() - 60_000),
   competence: '2026-10-01',
-  serviceCents: 1813560,
-  foreignAmountCents: 350000,
+  serviceCents: 670321,
+  foreignAmountCents: 123400,
   description: 'Serviços de outubro',
 });
 
@@ -37,11 +37,11 @@ test('issues a copy of the template with the new amounts and description', async
   if (outcome.kind !== 'issued') return;
   expect(outcome.invoice).toMatchObject({
     competence: '2026-10-01',
-    amounts: { serviceCents: 1813560 },
+    amounts: { serviceCents: 670321 },
     service: { nationalTaxCode: '010701', description: 'Serviços de outubro' },
     customer: { document: { type: 'NIF', value: '00-0000000' } },
   });
-  expect(outcome.invoice.xml).toContain('<vServMoeda>3500.00</vServMoeda>');
+  expect(outcome.invoice.xml).toContain('<vServMoeda>1234.00</vServMoeda>');
   expect(outcome.invoice.xml).toContain('<cClassTrib>410027</cClassTrib>');
 });
 

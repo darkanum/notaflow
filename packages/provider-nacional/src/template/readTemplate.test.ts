@@ -47,7 +47,7 @@ describe('readTemplate', () => {
           mdic: '0',
         },
       },
-      serviceCents: 1036320,
+      serviceCents: 1086420,
       tax: {
         issqnTaxation: '3',
         resultCountry: 'US',

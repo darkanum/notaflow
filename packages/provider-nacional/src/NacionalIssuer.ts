@@ -54,7 +54,7 @@ export class NacionalIssuer implements InvoiceIssuer {
     if (isDuplicateDps(result.errors)) {
       const existing = await this.findIssued(id);
       return existing
-        ? { kind: 'issued', invoice: existing }
+        ? { kind: 'issued', invoice: existing, recovered: true }
         : { kind: 'uncertain', reason: 'E0014 but no NFS-e found for the DPS' };
     }
     return {

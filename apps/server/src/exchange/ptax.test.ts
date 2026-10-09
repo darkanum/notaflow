@@ -19,12 +19,12 @@ function reply(date: string, bulletins: { tipoBoletim: string; cotacaoVenda: num
 test('takes the sell rate of the closing bulletin on the date', async () => {
   reply('08-31-2026', [
     { tipoBoletim: 'Abertura', cotacaoVenda: 5.1814 },
-    { tipoBoletim: 'Fechamento PTAX', cotacaoVenda: 5.1816 },
+    { tipoBoletim: 'Fechamento PTAX', cotacaoVenda: 5.4321 },
   ]);
   expect(await fetchPtaxSell({ currency: 'USD', date: '2026-08-31', dispatcher: agent })).toEqual({
     currency: 'USD',
     date: '2026-08-31',
-    rateE4: 51816,
+    rateE4: 54321,
     source: 'PTAX venda, fechamento',
   });
 });
@@ -46,9 +46,9 @@ test('gives up after maxDaysBack', async () => {
   ).rejects.toThrow(/PTAX/);
 });
 
-test('convertToCents reproduces the real August invoice: 3500.00 USD at 5.1816 is R$ 18135.60', () => {
-  expect(convertToCents(350000, 51816)).toBe(1813560);
-  expect(convertToCents(1, 51816)).toBe(5);
+test('convertToCents: 1234.00 USD at 5.4321 is R$ 6703.21, rounded half up', () => {
+  expect(convertToCents(123400, 54321)).toBe(670321);
+  expect(convertToCents(1, 54321)).toBe(5);
 });
 
 test('an error answer from the PTAX service fails instead of reading as no quote', async () => {

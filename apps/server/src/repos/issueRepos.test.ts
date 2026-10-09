@@ -3,7 +3,7 @@ import { seedTenant } from '../../test/fixtures';
 import { providerInvoice } from '../../test/providerData';
 import { type Database, openDatabase } from '../db/openDatabase';
 import { EmitterRepository } from './EmitterRepository';
-import { InvoiceRepository } from './InvoiceRepository';
+import { InvoiceRepository, isOwnInvoice } from './InvoiceRepository';
 
 let db: Database;
 let close: () => void;
@@ -141,4 +141,9 @@ test('a sync never adopts an invoice of another system that took the same DPS nu
   expect(invoices.upsertSynced(a, emitterId, invoice, null).created).toBe(true);
   expect(invoices.issueState(a, id)?.status).toBe('rejected');
   expect(invoices.list(a, { limit: 10, offset: 0 }).total).toBe(2);
+});
+
+test('isOwnInvoice ignores line endings and outer spaces in the description', () => {
+  const row = { competence: '2026-09-30', serviceCents: 150000, description: ' Consultoria\r\nem análise ', customerDocument: '98765432000110' };
+  expect(isOwnInvoice(row, providerInvoice({ service: { nationalTaxCode: '010101', description: 'Consultoria\nem análise' } }))).toBe(true);
 });

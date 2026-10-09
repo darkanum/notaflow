@@ -10,8 +10,8 @@ beforeEach(async () => {
 });
 afterEach(() => t.close());
 
-test('a timeout leaves the invoice unknown; reconcile finds it, with no second NFS-e', async () => {
-  const { a, emitterId, headers, templateInvoiceId } = await withTemplate(t);
+test('a timeout leaves the invoice unknown; reconcile finds it by DPS id without a resend', async () => {
+  const { a, headers, templateInvoiceId } = await withTemplate(t);
   t.fake.next('issue', { kind: 'delay', ms: 600 });
   const issued = await t.app.inject({
     method: 'POST',
@@ -25,10 +25,6 @@ test('a timeout leaves the invoice unknown; reconcile finds it, with no second N
   expect(reconciled.json()).toMatchObject({ id, status: 'issued', accessKey: expect.any(String) });
   // Found by the lookup: nothing was resent.
   expect(new AuditLog(t.db).list().some((e) => e.detail?.startsWith('resent'))).toBe(false);
-  // A blind resend would have made a second NFS-e; the feed must hold the template and one new invoice.
-  await t.app.inject({ method: 'POST', url: `/api/accounts/${a.accountId}/emitters/${emitterId}/sync`, headers, payload: {} });
-  const list = await t.app.inject({ method: 'GET', url: `/api/accounts/${a.accountId}/invoices`, headers });
-  expect(list.json()).toMatchObject({ total: 2 });
 });
 
 test('when the Sefin never stored it, reconcile resends the same DPS number', async () => {

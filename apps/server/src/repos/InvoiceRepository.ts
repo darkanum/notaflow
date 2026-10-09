@@ -11,6 +11,9 @@ export const CANCELLING_EVENTS = ['101101', '105102', '105104', '305101'];
 export const DPS_NUMBER_TAKEN =
   'O número da DPS já foi usado por outra NFS-e; emita de novo para usar o próximo.';
 
+// The XML parser turns CRLF into LF, and the Sefin may trim.
+const normalized = (text: string) => text.replace(/\r\n?/g, '\n').trim();
+
 // A resend of our own DPS reproduces these values; another system's invoice with the same number does not.
 export function isOwnInvoice(
   row: { competence: string; serviceCents: number; description: string; customerDocument: string | null },
@@ -19,7 +22,7 @@ export function isOwnInvoice(
   return (
     row.competence === invoice.competence &&
     row.serviceCents === invoice.amounts.serviceCents &&
-    row.description === invoice.service.description &&
+    normalized(row.description) === normalized(invoice.service.description) &&
     row.customerDocument === (invoice.customer?.document?.value ?? null)
   );
 }

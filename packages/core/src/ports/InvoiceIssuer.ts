@@ -13,7 +13,8 @@ export interface IssueRequest {
 }
 
 export type IssueOutcome =
-  | { kind: 'issued'; invoice: ProviderInvoice }
+  // recovered: found by DPS id after E0014, so it may belong to another system.
+  | { kind: 'issued'; invoice: ProviderInvoice; recovered?: true }
   | { kind: 'rejected'; errors: { code: string; message: string }[] }
   | { kind: 'uncertain'; reason: string };
 

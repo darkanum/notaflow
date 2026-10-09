@@ -163,7 +163,7 @@ export class IssueService {
       throw new HttpError(502, 'sefin_unavailable', error instanceof Error ? error.message : String(error));
     }
     if (found) {
-      return this.record(ctx, actor, 'invoice.reconcile', invoiceId, emitter.id, { kind: 'issued', invoice: found });
+      return this.record(ctx, actor, 'invoice.reconcile', invoiceId, emitter.id, { kind: 'issued', invoice: found, recovered: true });
     }
     // Only now is a resend safe, and it reuses the same DPS number.
     this.audit.record({
@@ -270,7 +270,8 @@ export class IssueService {
       const { invoice } = outcome;
       // E0014 on a fresh number means another system used it; its invoice is not ours.
       const row = this.invoices.issueState(ctx, invoiceId);
-      if (!row || !isOwnInvoice(row, invoice)) {
+      // A direct 201 answers our own DPS; only an invoice found by DPS id can be another one.
+      if (outcome.recovered && (!row || !isOwnInvoice(row, invoice))) {
         const errors = [{ code: 'E0014', message: DPS_NUMBER_TAKEN }];
         this.invoices.markRejected(ctx, invoiceId, errors);
         audit('refused', `dps number taken by ${invoice.accessKey}`);

@@ -20,7 +20,7 @@
 - Never use TypeScript non-null assertions (`value!`). ESLint enforces it.
 - A credential never enters git or a log. Tests use `@notaflow/test-kit` certificates and synthetic data (CNPJ `12345678000195`). No real invoice data enters the repository.
 - Every account query goes through a repository method that takes an `AccountContext`.
-- Amounts are integer cents. An exchange rate is an integer scaled by 10 000 (`51816` for 5.1816), so no float touches money.
+- Amounts are integer cents. An exchange rate is an integer scaled by 10 000 (`54321` for 5.4321), so no float touches money.
 - The DPS is signed with the Node signer and the `rsa-sha256-exc-c14n` profile (Stage 0 decision).
 - The issue date (`dhEmi`) is now minus 60 seconds, because the Sefin refuses a future date and clocks drift. The competence is chosen by the user and must not be after the issue date (Brasília day).
 - The app never resends a DPS blindly: an `unknown` invoice is resent only after `GET /dps/{id}` says no NFS-e exists for it, and always with the same DPS number.
@@ -195,7 +195,7 @@ This list is exactly what `buildDpsXml` writes (Stage 0 and the export work), so
 `packages/provider-nacional/test/fixtures/NFSE_EXPORT_FULL.xml` is a synthetic export NFS-e with every group of the emitter's real export invoice, built from synthetic values. Create it from the builder, so it is valid by construction: run once
 
 ```bash
-pnpm --filter @notaflow/provider-nacional exec tsx -e "import { buildDpsXml } from './src/index.ts'; import { writeFileSync } from 'node:fs'; const { xml } = buildDpsXml({ environment: 'producao_restrita', issuedAt: new Date('2026-09-02T16:12:54Z'), appVersion: 'notaflow-test', series: '900', number: 6, competence: '2026-08-31', emitterMunicipality: '4113700', provider: { cnpj: '12345678000195', phone: '43999990000', email: 'contato@example.com', simplesNacional: '3', simplesRegime: '1', specialRegime: '0' }, customer: { document: { type: 'NIF', value: '00-0000000' }, name: 'Foreign Customer Inc', address: { country: 'US', postalCode: '99999', city: 'Testville', region: 'NY', street: '1 Example Street', number: '1', complement: 'Suite 2', district: 'Downtown' } }, service: { municipality: '4113700', nationalTaxCode: '010701', description: 'Serviços de TI para tomador no exterior', nbsCode: '115080000', foreignTrade: { mode: '1', providerLink: '0', currency: '220', amountInCurrencyCents: 200000, providerSupport: '02', customerSupport: '02', temporaryGoods: '1', mdic: '0' } }, amounts: { serviceCents: 1036320 }, tax: { issqnTaxation: '3', resultCountry: 'US', issRetention: '1', pisCofins: { cst: '00', retention: '0' }, simplesTotalPercent: '6.00' }, ibsCbs: { purpose: '0', finalConsumer: '0', operationCode: '100302', destination: '0', cst: '410', classCode: '410027' } }); const nfse = '<?xml version=\"1.0\" encoding=\"utf-8\"?><NFSe versao=\"1.01\" xmlns=\"http://www.sped.fazenda.gov.br/nfse\"><infNFSe Id=\"NFS41137002212345678000195000000000000626090000000060\"><nNFSe>6</nNFSe><cStat>100</cStat><dhProc>2026-09-02T13:12:54-03:00</dhProc><emit><CNPJ>12345678000195</CNPJ><xNome>EMPRESA TESTE LTDA</xNome></emit><valores><vLiq>10363.20</vLiq></valores>' + xml + '</infNFSe></NFSe>'; writeFileSync('test/fixtures/NFSE_EXPORT_FULL.xml', nfse + '\n');"
+pnpm --filter @notaflow/provider-nacional exec tsx -e "import { buildDpsXml } from './src/index.ts'; import { writeFileSync } from 'node:fs'; const { xml } = buildDpsXml({ environment: 'producao_restrita', issuedAt: new Date('2026-09-02T16:12:54Z'), appVersion: 'notaflow-test', series: '900', number: 6, competence: '2026-08-31', emitterMunicipality: '4113700', provider: { cnpj: '12345678000195', phone: '43999990000', email: 'contato@example.com', simplesNacional: '3', simplesRegime: '1', specialRegime: '0' }, customer: { document: { type: 'NIF', value: '00-0000000' }, name: 'Foreign Customer Inc', address: { country: 'US', postalCode: '99999', city: 'Testville', region: 'NY', street: '1 Example Street', number: '1', complement: 'Suite 2', district: 'Downtown' } }, service: { municipality: '4113700', nationalTaxCode: '010701', description: 'Serviços de TI para tomador no exterior', nbsCode: '115080000', foreignTrade: { mode: '1', providerLink: '0', currency: '220', amountInCurrencyCents: 200000, providerSupport: '02', customerSupport: '02', temporaryGoods: '1', mdic: '0' } }, amounts: { serviceCents: 1086420 }, tax: { issqnTaxation: '3', resultCountry: 'US', issRetention: '1', pisCofins: { cst: '00', retention: '0' }, simplesTotalPercent: '6.00' }, ibsCbs: { purpose: '0', finalConsumer: '0', operationCode: '100302', destination: '0', cst: '410', classCode: '410027' } }); const nfse = '<?xml version=\"1.0\" encoding=\"utf-8\"?><NFSe versao=\"1.01\" xmlns=\"http://www.sped.fazenda.gov.br/nfse\"><infNFSe Id=\"NFS41137002212345678000195000000000000626090000000060\"><nNFSe>6</nNFSe><cStat>100</cStat><dhProc>2026-09-02T13:12:54-03:00</dhProc><emit><CNPJ>12345678000195</CNPJ><xNome>EMPRESA TESTE LTDA</xNome></emit><valores><vLiq>10864.20</vLiq></valores>' + xml + '</infNFSe></NFSe>'; writeFileSync('test/fixtures/NFSE_EXPORT_FULL.xml', nfse + '\n');"
 ```
 
 Check: `parseNfseXml` (Stage 1a-1) reads the file; the root `DPS` element keeps its `xmlns`.
@@ -254,7 +254,7 @@ describe('readTemplate', () => {
           mdic: '0',
         },
       },
-      serviceCents: 1036320,
+      serviceCents: 1086420,
       tax: {
         issqnTaxation: '3',
         resultCountry: 'US',
@@ -538,8 +538,8 @@ const request = (number: number) => ({
   number,
   issuedAt: new Date(Date.now() - 60_000),
   competence: '2026-10-01',
-  serviceCents: 1813560,
-  foreignAmountCents: 350000,
+  serviceCents: 670321,
+  foreignAmountCents: 123400,
   description: 'Serviços de outubro',
 });
 
@@ -549,11 +549,11 @@ test('issues a copy of the template with the new amounts and description', async
   if (outcome.kind !== 'issued') return;
   expect(outcome.invoice).toMatchObject({
     competence: '2026-10-01',
-    amounts: { serviceCents: 1813560 },
+    amounts: { serviceCents: 670321 },
     service: { nationalTaxCode: '010701', description: 'Serviços de outubro' },
     customer: { document: { type: 'NIF', value: '00-0000000' } },
   });
-  expect(outcome.invoice.xml).toContain('<vServMoeda>3500.00</vServMoeda>');
+  expect(outcome.invoice.xml).toContain('<vServMoeda>1234.00</vServMoeda>');
   expect(outcome.invoice.xml).toContain('<cClassTrib>410027</cClassTrib>');
 });
 
@@ -792,12 +792,12 @@ function reply(date: string, bulletins: { tipoBoletim: string; cotacaoVenda: num
 test('takes the sell rate of the closing bulletin on the date', async () => {
   reply('08-31-2026', [
     { tipoBoletim: 'Abertura', cotacaoVenda: 5.1814 },
-    { tipoBoletim: 'Fechamento PTAX', cotacaoVenda: 5.1816 },
+    { tipoBoletim: 'Fechamento PTAX', cotacaoVenda: 5.4321 },
   ]);
   expect(await fetchPtaxSell({ currency: 'USD', date: '2026-08-31', dispatcher: agent })).toEqual({
     currency: 'USD',
     date: '2026-08-31',
-    rateE4: 51816,
+    rateE4: 54321,
     source: 'PTAX venda, fechamento',
   });
 });
@@ -819,9 +819,9 @@ test('gives up after maxDaysBack', async () => {
   ).rejects.toThrow(/PTAX/);
 });
 
-test('convertToCents reproduces the real August invoice: 3500.00 USD at 5.1816 is R$ 18135.60', () => {
-  expect(convertToCents(350000, 51816)).toBe(1813560);
-  expect(convertToCents(1, 51816)).toBe(5);
+test('convertToCents: 1234.00 USD at 5.4321 is R$ 6703.21, rounded half up', () => {
+  expect(convertToCents(123400, 54321)).toBe(670321);
+  expect(convertToCents(1, 54321)).toBe(5);
 });
 ```
 
@@ -1063,7 +1063,7 @@ git commit -m "feat(server): reserve DPS numbers and track pending, issued, reje
   - `class IssueService` with `issue(ctx, input): Promise<IssueResultView>`, `reconcile(ctx, invoiceId)`, `cancel(ctx, invoiceId, reason, justification)` (Tasks 6 to 8)
   - Routes:
     - `GET /api/accounts/:accountId/invoices/:invoiceId/draft` → `200 { templateInvoiceId, emitterId, competence, serviceCents, description, customer: InvoiceParty | null, foreign: { currency: 'USD' | ...; amountCents: number } | null }`; `422 template_unsupported { paths }`
-    - `GET /api/accounts/:accountId/exchange-rate?currency=220&date=YYYY-MM-DD` → `200 { currency, date, rate: '5.1816', rateE4, source }`; `502 ptax_unavailable`
+    - `GET /api/accounts/:accountId/exchange-rate?currency=220&date=YYYY-MM-DD` → `200 { currency, date, rate: '5.4321', rateE4, source }`; `502 ptax_unavailable`
     - `POST /api/accounts/:accountId/invoices/issue` `{ templateInvoiceId, competence, serviceCents, foreignAmountCents?, description?, customerId? }` (write) → `201 { id, status: 'issued' | 'rejected' | 'unknown', number?, accessKey?, errors? }`; `422 template_unsupported`; `400 invalid_amount`, `400 competence_after_issue`
 
 Issue flow (RFC "Send, protected against duplicates"):
@@ -1128,7 +1128,7 @@ test('the draft copies the template and marks it as an export', async () => {
   const draft = await t.app.inject({ method: 'GET', url: `/api/accounts/${a.accountId}/invoices/${templateInvoiceId}/draft`, headers });
   expect(draft.json()).toMatchObject({
     templateInvoiceId,
-    serviceCents: 1036320,
+    serviceCents: 1086420,
     foreign: { currency: 'USD', amountCents: 200000 },
     customer: { document: { type: 'NIF' } },
   });
@@ -1140,13 +1140,13 @@ test('issue similar: pending, then issued with a new DPS number and the new amou
     method: 'POST',
     url: `/api/accounts/${a.accountId}/invoices/issue`,
     headers,
-    payload: { templateInvoiceId, competence: '2026-09-30', serviceCents: 1813560, foreignAmountCents: 350000, description: 'Serviços de setembro' },
+    payload: { templateInvoiceId, competence: '2026-09-30', serviceCents: 670321, foreignAmountCents: 123400, description: 'Serviços de setembro' },
   });
   expect(response.statusCode).toBe(201);
   expect(response.json()).toMatchObject({ status: 'issued', accessKey: expect.any(String) });
   const { id } = response.json<{ id: string }>();
   const detail = await t.app.inject({ method: 'GET', url: `/api/accounts/${a.accountId}/invoices/${id}`, headers });
-  expect(detail.json()).toMatchObject({ status: 'issued', serviceCents: 1813560, description: 'Serviços de setembro', origin: 'app' });
+  expect(detail.json()).toMatchObject({ status: 'issued', serviceCents: 670321, description: 'Serviços de setembro', origin: 'app' });
 });
 
 test('two issues at the same time get two different DPS numbers', async () => {
@@ -1175,7 +1175,7 @@ test('the exchange rate route returns the PTAX sell closing rate', async () => {
   ptax
     .get('https://olinda.bcb.gov.br')
     .intercept({ path: (p) => p.includes('08-31-2026'), method: 'GET' })
-    .reply(200, { value: [{ tipoBoletim: 'Fechamento PTAX', cotacaoVenda: 5.1816, cotacaoCompra: 5.181 }] });
+    .reply(200, { value: [{ tipoBoletim: 'Fechamento PTAX', cotacaoVenda: 5.4321, cotacaoCompra: 5.181 }] });
   const own = await createTestApp({ ptaxDispatcher: ptax });
   const a = seedTenant(own.db, { accountName: 'A', email: 'x@example.com' });
   const response = await own.app.inject({
@@ -1184,7 +1184,7 @@ test('the exchange rate route returns the PTAX sell closing rate', async () => {
     headers: await own.as('x@example.com'),
   });
   await own.close();
-  expect(response.json()).toEqual({ currency: 'USD', date: '2026-08-31', rate: '5.1816', rateE4: 51816, source: 'PTAX venda, fechamento' });
+  expect(response.json()).toEqual({ currency: 'USD', date: '2026-08-31', rate: '5.4321', rateE4: 54321, source: 'PTAX venda, fechamento' });
 });
 ```
 
