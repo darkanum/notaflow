@@ -1,0 +1,99 @@
+import { sql } from 'drizzle-orm';
+import { blob, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+
+const id = () => text('id').primaryKey();
+const createdAt = () =>
+  integer('created_at', { mode: 'timestamp_ms' })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`);
+
+export const accounts = sqliteTable('accounts', {
+  id: id(),
+  name: text('name').notNull(),
+  status: text('status', { enum: ['active', 'suspended'] })
+    .notNull()
+    .default('active'),
+  plan: text('plan').notNull().default(''),
+  createdAt: createdAt(),
+});
+
+export const users = sqliteTable('users', {
+  id: id(),
+  email: text('email').notNull().unique(),
+  name: text('name').notNull(),
+  platformRole: text('platform_role', { enum: ['admin', 'user'] })
+    .notNull()
+    .default('user'),
+  lastLoginAt: integer('last_login_at', { mode: 'timestamp_ms' }),
+  createdAt: createdAt(),
+});
+
+export const memberships = sqliteTable(
+  'memberships',
+  {
+    id: id(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    accountId: text('account_id')
+      .notNull()
+      .references(() => accounts.id),
+    role: text('role', { enum: ['owner', 'member'] }).notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [uniqueIndex('memberships_user_account').on(table.userId, table.accountId)],
+);
+
+export const emitters = sqliteTable('emitters', {
+  id: id(),
+  accountId: text('account_id')
+    .notNull()
+    .references(() => accounts.id),
+  cnpj: text('cnpj').notNull().unique(),
+  companyName: text('company_name').notNull(),
+  municipalRegistration: text('municipal_registration'),
+  municipality: text('municipality').notNull(),
+  simplesNacional: text('simples_nacional', { enum: ['1', '2', '3'] }).notNull(),
+  simplesRegime: text('simples_regime', { enum: ['1', '2', '3'] }),
+  specialRegime: text('special_regime').notNull(),
+  provider: text('provider', { enum: ['nacional'] })
+    .notNull()
+    .default('nacional'),
+  environment: text('environment', { enum: ['producao', 'producao_restrita'] })
+    .notNull()
+    .default('producao_restrita'),
+  dpsSeries: text('dps_series').notNull(),
+  nextDpsNumber: integer('next_dps_number').notNull().default(1),
+  createdAt: createdAt(),
+});
+
+export const certificates = sqliteTable('certificates', {
+  id: id(),
+  emitterId: text('emitter_id')
+    .notNull()
+    .references(() => emitters.id),
+  pfxCiphertext: blob('pfx_ciphertext', { mode: 'buffer' }).notNull(),
+  passwordCiphertext: blob('password_ciphertext', { mode: 'buffer' }).notNull(),
+  wrappedKey: blob('wrapped_key', { mode: 'buffer' }).notNull(),
+  cnpj: text('cnpj').notNull(),
+  subject: text('subject').notNull(),
+  validFrom: integer('valid_from', { mode: 'timestamp_ms' }).notNull(),
+  validTo: integer('valid_to', { mode: 'timestamp_ms' }).notNull(),
+  fingerprintSha256: text('fingerprint_sha256').notNull(),
+  active: integer('active', { mode: 'boolean' }).notNull(),
+  uploadedBy: text('uploaded_by')
+    .notNull()
+    .references(() => users.id),
+  uploadedAt: createdAt(),
+});
+
+export const auditLog = sqliteTable('audit_log', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userEmail: text('user_email').notNull(),
+  accountId: text('account_id'),
+  action: text('action').notNull(),
+  entity: text('entity').notNull(),
+  result: text('result', { enum: ['ok', 'refused', 'error'] }).notNull(),
+  detail: text('detail'),
+  at: createdAt(),
+});
