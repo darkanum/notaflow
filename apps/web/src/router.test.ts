@@ -21,6 +21,23 @@ test('routeHref is the inverse of parseRoute', () => {
 
 test('customer routes', () => {
   expect(parseRoute('#/a/acc/customers')).toEqual({ name: 'customers', accountId: 'acc' });
-  expect(parseRoute('#/a/acc/customers/c1')).toEqual({ name: 'customer', accountId: 'acc', customerId: 'c1' });
-  expect(routeHref({ name: 'customer', accountId: 'acc', customerId: 'c1' })).toBe('#/a/acc/customers/c1');
+  expect(parseRoute('#/a/acc/customers/c1')).toEqual({
+    name: 'customer',
+    accountId: 'acc',
+    customerId: 'c1',
+  });
+  expect(routeHref({ name: 'customer', accountId: 'acc', customerId: 'c1' })).toBe(
+    '#/a/acc/customers/c1',
+  );
+});
+
+test('the issue route', () => {
+  expect(parseRoute('#/a/acc/invoices/inv1/issue')).toEqual({
+    name: 'issue',
+    accountId: 'acc',
+    invoiceId: 'inv1',
+  });
+  expect(routeHref({ name: 'issue', accountId: 'acc', invoiceId: 'inv1' })).toBe(
+    '#/a/acc/invoices/inv1/issue',
+  );
 });

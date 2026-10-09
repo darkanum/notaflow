@@ -7,11 +7,11 @@
  */
 
 :root {
-  --color-primary: 30 64 175;    /* azul profundo */
+  --color-primary: 30 64 175; /* azul profundo */
   --color-primary-fg: 255 255 255;
-  --color-surface: 250 250 249;  /* off-white */
-  --color-fg: 9 13 20;           /* quase preto */
-  --color-muted: 100 116 139;    /* slate-500 */
+  --color-surface: 250 250 249; /* off-white */
+  --color-fg: 9 13 20; /* quase preto */
+  --color-muted: 100 116 139; /* slate-500 */
   --color-border: 226 228 232;
 
   --color-danger: 220 38 38;
@@ -24,14 +24,14 @@
   --color-info-fg: 255 255 255;
 
   --radius: 0.5rem;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    Helvetica, Arial, sans-serif;
-  --font-display: "Space Grotesk", var(--font-sans);
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-display: 'Space Grotesk', var(--font-sans);
 }
 
 @font-face {
-  font-family: "Space Grotesk";
-  src: url("/malphas-assets/fonts/SpaceGrotesk.woff2") format("woff2");
+  font-family: 'Space Grotesk';
+  src: url('/malphas-assets/fonts/SpaceGrotesk.woff2') format('woff2');
   font-weight: 500 700;
   font-style: normal;
   font-display: swap;
@@ -47,7 +47,7 @@
 
 /* Follow the OS unless the user explicitly asked for light. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme='light']) {
     /* --color-primary sozinho já não tem override aqui, e o tom claro
      * (indigo-800) cai pra ~2.3:1 sobre --color-surface: abaixo do piso AA de
      * 3:1 pra texto grande, nem de longe os 4.5:1 de texto normal. O tom mais
@@ -69,7 +69,7 @@
 }
 
 /* An explicit choice wins over the OS in both directions. */
-:root[data-theme="dark"] {
+:root[data-theme='dark'] {
   --color-primary: 96 165 250;
   --color-primary-fg: 10 15 26;
   --color-surface: 10 15 26;

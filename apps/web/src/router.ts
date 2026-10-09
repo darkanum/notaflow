@@ -5,6 +5,7 @@ export type Route =
   | { name: 'emitters'; accountId: string }
   | { name: 'invoices'; accountId: string }
   | { name: 'invoice'; accountId: string; invoiceId: string }
+  | { name: 'issue'; accountId: string; invoiceId: string }
   | { name: 'members'; accountId: string }
   | { name: 'customers'; accountId: string }
   | { name: 'customer'; accountId: string; customerId: string }
@@ -20,6 +21,9 @@ export function parseRoute(hash: string): Route {
     if (section === 'invoices' && parts.length === 3) return { name: 'invoices', accountId };
     if (section === 'invoices' && invoiceId && parts.length === 4) {
       return { name: 'invoice', accountId, invoiceId };
+    }
+    if (section === 'invoices' && invoiceId && parts[4] === 'issue' && parts.length === 5) {
+      return { name: 'issue', accountId, invoiceId };
     }
     if (section === 'members' && parts.length === 3) return { name: 'members', accountId };
     if (section === 'customers' && parts.length === 3) return { name: 'customers', accountId };
@@ -39,6 +43,8 @@ export function routeHref(route: Route): string {
       return '#/admin';
     case 'invoice':
       return `#/a/${e(route.accountId)}/invoices/${e(route.invoiceId)}`;
+    case 'issue':
+      return `#/a/${e(route.accountId)}/invoices/${e(route.invoiceId)}/issue`;
     case 'customer':
       return `#/a/${e(route.accountId)}/customers/${e(route.customerId)}`;
     default:

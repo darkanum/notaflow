@@ -2,19 +2,29 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
+    // The whole error body, for answers that carry more than a code (Sefin code and message).
+    readonly body: Record<string, unknown> = {},
   ) {
     super(code);
     this.name = 'ApiError';
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  headers: Record<string, string> = {},
+): Promise<T> {
   const response = await fetch(path, {
     method,
     credentials: 'same-origin',
     ...(body === undefined
       ? {}
-      : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+      : {
+          headers: { 'content-type': 'application/json', ...headers },
+          body: JSON.stringify(body),
+        }),
   });
   if (response.status === 204) return undefined as T;
   const data: unknown = await response.json().catch(() => null);
@@ -23,14 +33,19 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       typeof data === 'object' && data !== null && 'error' in data
         ? String(data.error)
         : `http_${response.status}`;
-    throw new ApiError(response.status, code);
+    throw new ApiError(
+      response.status,
+      code,
+      typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {},
+    );
   }
   return data as T;
 }
 
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
-  post: <T>(path: string, body: unknown) => request<T>('POST', path, body),
+  post: <T>(path: string, body: unknown, headers?: Record<string, string>) =>
+    request<T>('POST', path, body, headers),
   put: <T>(path: string, body: unknown) => request<T>('PUT', path, body),
 };
 
@@ -132,4 +147,63 @@ export interface AuditEntry {
   result: 'ok' | 'refused' | 'error';
   detail: string | null;
   at: string;
+}
+
+export interface PartyAddress {
+  kind: 'domestic' | 'foreign';
+  municipality?: string;
+  zip?: string;
+  country?: string;
+  postalCode?: string;
+  city?: string;
+  region?: string;
+  street: string;
+  number: string;
+  complement?: string;
+  district: string;
+}
+
+export interface Party {
+  document: { type: 'CNPJ' | 'CPF' | 'NIF'; value: string } | null;
+  name: string;
+}
+
+export interface Draft {
+  templateInvoiceId: string;
+  emitterId: string;
+  competence: string;
+  serviceCents: number;
+  description: string;
+  customer: Party | null;
+  foreign: { currency: string; currencyCode: string; amountCents: number } | null;
+}
+
+export interface ExchangeRate {
+  currency: string;
+  date: string;
+  rate: string;
+  rateE4: number;
+  source: string;
+}
+
+export interface IssueResult {
+  id: string;
+  status: InvoiceSummary['status'];
+  number?: string;
+  accessKey?: string;
+  errors?: { code: string; message: string }[];
+}
+
+export interface Customer {
+  id: string;
+  emitterId: string;
+  documentType: 'CNPJ' | 'CPF' | 'NIF' | 'NONE';
+  document: string | null;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  municipalRegistration: string | null;
+  address: PartyAddress | null;
+  origin: 'manual' | 'imported';
+  archived: boolean;
 }
