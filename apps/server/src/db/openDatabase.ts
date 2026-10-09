@@ -1,3 +1,5 @@
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import BetterSqlite3 from 'better-sqlite3';
 import { type BetterSQLite3Database, drizzle } from 'drizzle-orm/better-sqlite3';
@@ -11,6 +13,7 @@ export type Database = BetterSQLite3Database<typeof schema> & {
 const MIGRATIONS = fileURLToPath(new URL('../../drizzle', import.meta.url));
 
 export function openDatabase(path: string): { db: Database; close(): void } {
+  if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const client = new BetterSqlite3(path);
   client.pragma('journal_mode = WAL');
   // SQLite leaves foreign keys off unless every connection turns them on.

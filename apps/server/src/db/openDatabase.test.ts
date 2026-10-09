@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import { openDatabase } from './openDatabase';
 import { accounts, emitters, users } from './schema';
@@ -78,4 +81,13 @@ test('foreign keys are enforced', () => {
       .run(),
   ).toThrow(/FOREIGN KEY/);
   close();
+});
+
+test('creates the parent folder of a database file that does not exist yet', () => {
+  const root = mkdtempSync(join(tmpdir(), 'notaflow-db-'));
+  const path = join(root, 'data', 'nested', 'notaflow.db');
+  const { close } = openDatabase(path);
+  close();
+  expect(existsSync(path)).toBe(true);
+  rmSync(root, { recursive: true, force: true });
 });
