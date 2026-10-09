@@ -8,6 +8,7 @@ export {
   formatBrasiliaDate,
   formatBrasiliaDateTime,
 } from './xml/formatters';
+export { parseEventXml } from './parse/parseEventXml';
 export { parseNfseXml } from './parse/parseNfseXml';
 export { NfseParseError } from './xml/readXml';
 export { buildCancelEventXml } from './events/buildCancelEventXml';
