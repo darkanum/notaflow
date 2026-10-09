@@ -1,4 +1,4 @@
-import type { CertificateMaterial } from '@notaflow/core';
+import type { AccountContext, CertificateMaterial } from '@notaflow/core';
 import { CertificateError, loadCertificate } from '@notaflow/signer-node';
 import type { FastifyInstance } from 'fastify';
 import { accountContext, identityOf } from '../auth/guards';
@@ -63,7 +63,12 @@ export function openPfx(
 
 export function emitterRoutes(
   app: FastifyInstance,
-  deps: { db: Database; masterKey: Buffer; providerFactory: ProviderFactory },
+  deps: {
+    db: Database;
+    masterKey: Buffer;
+    providerFactory: ProviderFactory;
+    onEmitterCreated: (ctx: AccountContext, emitterId: string) => void;
+  },
 ): void {
   const emitters = new EmitterRepository(deps.db);
   const certificates = new CertificateRepository(deps.db);
@@ -175,6 +180,7 @@ export function emitterRoutes(
         entity: emitter.id,
         result: 'ok',
       });
+      deps.onEmitterCreated(ctx, emitter.id);
       return reply.status(201).send({
         id: emitter.id,
         cnpj: emitter.cnpj,
