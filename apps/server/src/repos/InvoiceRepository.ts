@@ -217,6 +217,7 @@ export class InvoiceRepository {
       dpsNumber: number;
       competence: string;
       serviceCents: number;
+      foreignAmountCents?: number;
       description: string;
       customerId: string | null;
       customerDocument: string | null;
@@ -288,6 +289,7 @@ export class InvoiceRepository {
           templateOf: invoices.templateOf,
           competence: invoices.competence,
           serviceCents: invoices.serviceCents,
+          foreignAmountCents: invoices.foreignAmountCents,
           description: invoices.description,
           customerId: invoices.customerId,
         })

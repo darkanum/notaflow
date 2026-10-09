@@ -5,6 +5,7 @@ import type { Dispatcher } from 'undici';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
 import { buildApp } from '../src/app';
 import { createAccessVerifier } from '../src/auth/accessVerifier';
+import { nacionalIssuerFactory } from '../src/providers/providerFactory';
 import { loadConfig } from '../src/config';
 import { type Database, openDatabase } from '../src/db/openDatabase';
 
@@ -52,6 +53,8 @@ export async function createTestApp(
     onEmitterCreated: options.onEmitterCreated ?? (() => {}),
     // Production waits 1, 5, and 15 seconds; a test would hit its own timeout.
     syncRetryDelaysMs: [0, 0],
+    // A short Sefin timeout, so the fake's delay scenario turns into an uncertain result.
+    issuerFactory: nacionalIssuerFactory(config.nacionalUrls, 300),
   });
   await app.ready();
 

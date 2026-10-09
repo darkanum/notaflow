@@ -33,13 +33,17 @@ export function nacionalProviderFactory(urls?: { sefin: string; adn: string }): 
     );
 }
 
-export function nacionalIssuerFactory(urls?: { sefin: string; adn: string }): IssuerFactory {
+export function nacionalIssuerFactory(
+  urls?: { sefin: string; adn: string },
+  timeoutMs?: number,
+): IssuerFactory {
   return ({ environment, certificate }) =>
     new NacionalIssuer({
       client: new NacionalClient({
         environment,
         dispatcher: createMtlsDispatcher(certificate),
         ...(urls ? { urls } : {}),
+        ...(timeoutMs ? { timeoutMs } : {}),
       }),
       certificate,
       environment,

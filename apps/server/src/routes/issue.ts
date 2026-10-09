@@ -77,4 +77,12 @@ export function issueRoutes(
       return reply.status(201).send(result);
     },
   );
+
+  app.post<{ Params: { accountId: string; invoiceId: string } }>(
+    '/api/accounts/:accountId/invoices/:invoiceId/reconcile',
+    async (request) => {
+      const ctx = accountContext(request, request.params.accountId, { write: true });
+      return deps.issue.reconcile(ctx, identityOf(request).email, request.params.invoiceId);
+    },
+  );
 }

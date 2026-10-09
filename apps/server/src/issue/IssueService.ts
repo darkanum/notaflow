@@ -109,6 +109,7 @@ export class IssueService {
         dpsNumber: number,
         competence: input.competence,
         serviceCents: input.serviceCents,
+        ...(input.foreignAmountCents ? { foreignAmountCents: input.foreignAmountCents } : {}),
         description,
         customerId: input.customerId ?? state.customerId,
         customerDocument: customer?.document?.value ?? templateCustomer?.document.value ?? null,
@@ -142,6 +143,56 @@ export class IssueService {
       ...(customer ? { customer } : {}),
     });
     return this.record(ctx, actor, 'invoice.issue', pending.id, emitter.id, outcome, input);
+  }
+
+  async reconcile(ctx: AccountContext, actor: string, invoiceId: string): Promise<IssueResultView> {
+    const state = this.invoices.issueState(ctx, invoiceId);
+    if (!state) throw new HttpError(404, 'not_found');
+    if ((state.status !== 'unknown' && state.status !== 'pending') || !state.dpsId || !state.templateOf) {
+      throw new HttpError(409, 'not_unknown');
+    }
+    const template = this.loadTemplate(ctx, state.templateOf);
+    const emitter = this.emitters.get(ctx, state.emitterId);
+    if (!emitter) throw new HttpError(404, 'not_found');
+    const certificate = await this.deps.certificates.loadActive(ctx, emitter.id);
+    if (!certificate) throw new HttpError(409, 'no_active_certificate');
+    const issuer = this.deps.issuerFactory({ environment: emitter.environment, certificate });
+
+    let found: Awaited<ReturnType<InvoiceIssuer['findIssued']>>;
+    try {
+      found = await issuer.findIssued(state.dpsId);
+    } catch (error) {
+      throw new HttpError(502, 'sefin_unavailable', error instanceof Error ? error.message : String(error));
+    }
+    if (found) {
+      return this.record(ctx, actor, 'invoice.reconcile', invoiceId, emitter.id, { kind: 'issued', invoice: found }, state);
+    }
+    // Only now is a resend safe, and it reuses the same DPS number.
+    this.audit.record({
+      userEmail: actor,
+      accountId: ctx.accountId,
+      action: 'invoice.reconcile',
+      entity: invoiceId,
+      result: 'ok',
+      detail: `resent DPS ${state.dpsNumber}`,
+    });
+    // The template's own customer is copied from its XML; only a chosen customer replaces it.
+    const customer =
+      state.customerId && state.customerId !== template.state.customerId
+        ? this.customerParty(ctx, state.customerId)
+        : undefined;
+    const outcome = await this.send(issuer, {
+      templateXml: template.xml,
+      series: state.dpsSeries,
+      number: state.dpsNumber,
+      issuedAt: new Date(this.now().getTime() - 60_000),
+      competence: state.competence,
+      serviceCents: state.serviceCents,
+      ...(state.foreignAmountCents ? { foreignAmountCents: state.foreignAmountCents } : {}),
+      description: state.description,
+      ...(customer ? { customer } : {}),
+    });
+    return this.record(ctx, actor, 'invoice.reconcile', invoiceId, emitter.id, outcome, state);
   }
 
   private async send(
