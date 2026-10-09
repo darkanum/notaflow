@@ -96,7 +96,7 @@ export class CustomerRepository {
       .map((row) => row.customer);
   }
 
-  private get(ctx: AccountContext, customerId: string): CustomerRow | null {
+  get(ctx: AccountContext, customerId: string): CustomerRow | null {
     const row = this.db
       .select({ customer: customers })
       .from(customers)

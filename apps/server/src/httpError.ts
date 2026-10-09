@@ -5,6 +5,7 @@ export class HttpError extends Error {
     readonly status: number,
     readonly code: string,
     readonly detail?: string,
+    readonly extra?: Record<string, unknown>,
   ) {
     super(code);
     this.name = 'HttpError';
@@ -19,7 +20,11 @@ export function handleError(
   if (error instanceof HttpError) {
     return reply
       .status(error.status)
-      .send({ error: error.code, ...(error.detail ? { detail: error.detail } : {}) });
+      .send({
+        error: error.code,
+        ...(error.detail ? { detail: error.detail } : {}),
+        ...error.extra,
+      });
   }
   const status =
     'statusCode' in error && typeof error.statusCode === 'number' ? error.statusCode : 500;

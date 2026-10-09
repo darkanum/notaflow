@@ -109,3 +109,10 @@ test('a sync that brings an unknown invoice adopts its row instead of adding a s
   expect(invoices.get(a, id)).toMatchObject({ status: 'issued', origin: 'app', accessKey: invoice.accessKey });
   expect(invoices.list(a, { limit: 10, offset: 0 }).total).toBe(1);
 });
+
+test('reserveDpsNumber skips the numbers the emitter already used in its series', () => {
+  const { a, emitterId } = setup();
+  // A synced invoice of the same series with DPS number 42, issued before the app.
+  new InvoiceRepository(db).upsertSynced(a, emitterId, providerInvoice(), null);
+  expect(new EmitterRepository(db).reserveDpsNumber(a, emitterId)).toBe(43);
+});

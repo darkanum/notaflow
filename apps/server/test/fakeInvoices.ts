@@ -22,6 +22,71 @@ const base: DpsInput = {
   tax: { issqnTaxation: '1', issRetention: '1' },
 };
 
+// The synthetic export invoice of the provider fixture NFSE_EXPORT_FULL.xml, as DPS number 6.
+export const exportInput: DpsInput = {
+  environment: 'producao_restrita',
+  issuedAt: new Date('2026-09-02T16:12:54Z'),
+  appVersion: 'notaflow-test',
+  series: '900',
+  number: 6,
+  competence: '2026-08-31',
+  emitterMunicipality: '4113700',
+  provider: {
+    cnpj: '12345678000195',
+    phone: '43999990000',
+    email: 'contato@example.com',
+    simplesNacional: '3',
+    simplesRegime: '1',
+    specialRegime: '0',
+  },
+  customer: {
+    document: { type: 'NIF', value: '00-0000000' },
+    name: 'Foreign Customer Inc',
+    address: {
+      country: 'US',
+      postalCode: '99999',
+      city: 'Testville',
+      region: 'NY',
+      street: '1 Example Street',
+      number: '1',
+      complement: 'Suite 2',
+      district: 'Downtown',
+    },
+  },
+  service: {
+    municipality: '4113700',
+    nationalTaxCode: '010701',
+    description: 'Serviços de TI para tomador no exterior',
+    nbsCode: '115080000',
+    foreignTrade: {
+      mode: '1',
+      providerLink: '0',
+      currency: '220',
+      amountInCurrencyCents: 200000,
+      providerSupport: '02',
+      customerSupport: '02',
+      temporaryGoods: '1',
+      mdic: '0',
+    },
+  },
+  amounts: { serviceCents: 1036320 },
+  tax: {
+    issqnTaxation: '3',
+    resultCountry: 'US',
+    issRetention: '1',
+    pisCofins: { cst: '00', retention: '0' },
+    simplesTotalPercent: '6.00',
+  },
+  ibsCbs: {
+    purpose: '0',
+    finalConsumer: '0',
+    operationCode: '100302',
+    destination: '0',
+    cst: '410',
+    classCode: '410027',
+  },
+};
+
 function clientFor(fake: Pick<FakeNacional, 'urls'>) {
   return new NacionalClient({
     environment: 'producao_restrita',
@@ -61,4 +126,13 @@ export async function cancelOnFake(
   });
   const result = await clientFor(fake).registerEvent(accessKey, xml);
   if (result.kind !== 'registered') throw new Error('fake did not cancel');
+}
+
+export async function issueExportOnFake(
+  fake: Pick<FakeNacional, 'urls'>,
+  overrides: Partial<DpsInput> = {},
+): Promise<string> {
+  const result = await clientFor(fake).issue(buildDpsXml({ ...exportInput, ...overrides }).xml);
+  if (result.kind !== 'issued') throw new Error(`fake did not issue: ${JSON.stringify(result)}`);
+  return result.accessKey;
 }
