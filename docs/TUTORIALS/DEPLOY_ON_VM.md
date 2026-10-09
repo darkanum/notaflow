@@ -20,7 +20,7 @@ The app publishes no host port. The northub tunnel reaches it on the Docker netw
 | --- | --- | --- |
 | `NFSE_MASTER_KEY` | `/opt/notaflow/.env` | Generated on the VPS. Keep a copy in the password manager, never next to a backup. Without it, stored certificates cannot be opened: users upload the `.pfx` again |
 | `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` | `/opt/notaflow/.env` | From the Cloudflare Access application of `notaflow.vapulab.com` |
-| `VM_SSH_KEY`, `VM_KNOWN_HOSTS`, `VM_HOST` | GitHub secrets of `darkanum/notaflow` | The deploy key (`notaflow-deploy` in `/root/.ssh/authorized_keys`) |
+| `VM_SSH_KEY`, `VM_KNOWN_HOSTS`, `VM_HOST` | Secrets of the GitHub environment `production`, which only the `production` branch can use | The deploy key (`notaflow-deploy` in `/root/.ssh/authorized_keys`, with `restrict`: no forwarding, no terminal) |
 
 To see the master key for the password manager: `ssh vapulab "grep NFSE_MASTER_KEY /opt/notaflow/.env"` in your own terminal.
 
@@ -41,6 +41,8 @@ docker compose exec app node --import tsx apps/server/src/seed.ts <email> "<name
 ```
 
 ## Roll back
+
+A red health check in the `Deploy` run means production is down: compose already replaced the container, and `.env` holds the new `IMAGE`. Roll back right away, as below, with the tag of the last good run.
 
 Every image is tagged with its commit. Put the older tag in `.env` and start it:
 

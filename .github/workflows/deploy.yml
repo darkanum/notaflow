@@ -17,7 +17,8 @@ env:
 
 jobs:
   build:
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    # A manual run deploys only production; an automatic one only a push that passed CI.
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/production') || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -62,15 +63,20 @@ jobs:
         with:
           ref: ${{ needs.build.outputs.sha }}
 
+      # The VM_* secrets live in the production environment, which only the production branch can use.
       - name: Configure SSH
+        env:
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.VM_KNOWN_HOSTS }}
+          VM_HOST: ${{ secrets.VM_HOST }}
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/id_ed25519
+          printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          printf '%s\n' "${{ secrets.VM_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          printf '%s\n' "$VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
           cat >> ~/.ssh/config <<EOF
           Host vm
-            HostName ${{ secrets.VM_HOST }}
+            HostName $VM_HOST
             User root
             IdentityFile ~/.ssh/id_ed25519
             IdentitiesOnly yes
@@ -79,13 +85,17 @@ jobs:
       - name: Copy the compose file
         run: scp deploy/compose.yaml vm:/opt/notaflow/compose.yaml
 
-      # The job token logs the VPS into GHCR only for the pull. IMAGE goes into .env only after a
-      # good pull, so a manual docker compose on the VPS always uses the running version.
+      # The job token logs in for the pull only, in a Docker config of its own: the VPS also deploys
+      # Vapulab, and a shared /root/.docker login would race with it. IMAGE goes into .env only after
+      # a good pull, so a manual docker compose on the VPS always uses the running version.
       - name: Start the new version
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | ssh vm "docker login ghcr.io -u ${{ github.actor }} --password-stdin"
-          ssh vm "cd /opt/notaflow && IMAGE=${IMAGE}:${TAG} docker compose pull app \
-            ; status=\$?; docker logout ghcr.io; [ \$status -eq 0 ] || exit \$status; \
+          echo "$TOKEN" | ssh vm "cd /opt/notaflow && export DOCKER_CONFIG=\$(mktemp -d) \
+            && docker login ghcr.io -u ${{ github.actor }} --password-stdin \
+            && IMAGE=${IMAGE}:${TAG} docker compose pull app \
+            ; status=\$?; rm -rf \"\$DOCKER_CONFIG\"; unset DOCKER_CONFIG; [ \$status -eq 0 ] || exit \$status; \
             sed -i '/^IMAGE=/d' .env && echo IMAGE=${IMAGE}:${TAG} >> .env \
             && docker compose up -d --remove-orphans && docker image prune -f"
 

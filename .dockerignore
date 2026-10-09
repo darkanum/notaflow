@@ -5,11 +5,13 @@
 **/data
 .env*
 **/.env*
-*.pfx
-*.p12
-*.pem
+**/*.pfx
+**/*.p12
+**/*.pem
+**/*.key
+.claude
 .superpowers
 .remember
 .playwright-mcp
-spikes/**/results.local.json
+spikes/**/results.local.*
 services
