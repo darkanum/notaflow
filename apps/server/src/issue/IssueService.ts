@@ -19,7 +19,7 @@ import type { IssuerFactory } from '../providers/providerFactory';
 import { AuditLog } from '../repos/AuditLog';
 import { CustomerRepository, type CustomerRow } from '../repos/CustomerRepository';
 import { EmitterRepository } from '../repos/EmitterRepository';
-import { InvoiceRepository } from '../repos/InvoiceRepository';
+import { DPS_NUMBER_TAKEN, InvoiceRepository, isOwnInvoice } from '../repos/InvoiceRepository';
 import type { VaultCertificateStore } from '../vault/VaultCertificateStore';
 
 export interface IssueInput {
@@ -38,9 +38,6 @@ export interface IssueResultView {
   accessKey?: string;
   errors?: { code: string; message: string }[];
 }
-
-// Shown to the user when the Sefin answers with an invoice that is not the one the app sent.
-const NUMBER_TAKEN = 'O número da DPS já foi usado por outra NFS-e; emita de novo para usar o próximo.';
 
 export class IssueService {
   private readonly invoices: InvoiceRepository;
@@ -142,7 +139,7 @@ export class IssueService {
       description,
       ...(customer ? { customer } : {}),
     });
-    return this.record(ctx, actor, 'invoice.issue', pending.id, emitter.id, outcome, input);
+    return this.record(ctx, actor, 'invoice.issue', pending.id, emitter.id, outcome);
   }
 
   async reconcile(ctx: AccountContext, actor: string, invoiceId: string): Promise<IssueResultView> {
@@ -156,7 +153,8 @@ export class IssueService {
     if (!emitter) throw new HttpError(404, 'not_found');
     const certificate = await this.deps.certificates.loadActive(ctx, emitter.id);
     if (!certificate) throw new HttpError(409, 'no_active_certificate');
-    const issuer = this.deps.issuerFactory({ environment: emitter.environment, certificate });
+    // The invoice's own environment: the emitter may have switched since the first send.
+    const issuer = this.deps.issuerFactory({ environment: state.environment, certificate });
 
     let found: Awaited<ReturnType<InvoiceIssuer['findIssued']>>;
     try {
@@ -165,7 +163,7 @@ export class IssueService {
       throw new HttpError(502, 'sefin_unavailable', error instanceof Error ? error.message : String(error));
     }
     if (found) {
-      return this.record(ctx, actor, 'invoice.reconcile', invoiceId, emitter.id, { kind: 'issued', invoice: found }, state);
+      return this.record(ctx, actor, 'invoice.reconcile', invoiceId, emitter.id, { kind: 'issued', invoice: found });
     }
     // Only now is a resend safe, and it reuses the same DPS number.
     this.audit.record({
@@ -192,7 +190,7 @@ export class IssueService {
       description: state.description,
       ...(customer ? { customer } : {}),
     });
-    return this.record(ctx, actor, 'invoice.reconcile', invoiceId, emitter.id, outcome, state);
+    return this.record(ctx, actor, 'invoice.reconcile', invoiceId, emitter.id, outcome);
   }
 
   async cancel(
@@ -265,15 +263,15 @@ export class IssueService {
     invoiceId: string,
     emitterId: string,
     outcome: IssueOutcome,
-    expected: { competence: string; serviceCents: number },
   ): IssueResultView {
     const audit = (result: 'ok' | 'refused' | 'error', detail: string) =>
       this.audit.record({ userEmail: actor, accountId: ctx.accountId, action, entity: invoiceId, result, detail });
     if (outcome.kind === 'issued') {
       const { invoice } = outcome;
       // E0014 on a fresh number means another system used it; its invoice is not ours.
-      if (invoice.amounts.serviceCents !== expected.serviceCents || invoice.competence !== expected.competence) {
-        const errors = [{ code: 'E0014', message: NUMBER_TAKEN }];
+      const row = this.invoices.issueState(ctx, invoiceId);
+      if (!row || !isOwnInvoice(row, invoice)) {
+        const errors = [{ code: 'E0014', message: DPS_NUMBER_TAKEN }];
         this.invoices.markRejected(ctx, invoiceId, errors);
         audit('refused', `dps number taken by ${invoice.accessKey}`);
         return { id: invoiceId, status: 'rejected', errors };

@@ -95,10 +95,10 @@ test('a sync that brings an unknown invoice adopts its row instead of adding a s
     dpsNumber: 42,
     competence: '2026-09-30',
     serviceCents: 150000,
-    description: 'Consultoria',
+    description: 'Consultoria em análise',
     customerId: null,
-    customerDocument: null,
-    customerName: null,
+    customerDocument: '98765432000110',
+    customerName: 'Cliente Exemplo Ltda',
     serviceCode: '010101',
     environment: 'producao_restrita',
     templateOf: 't',
@@ -115,4 +115,30 @@ test('reserveDpsNumber skips the numbers the emitter already used in its series'
   // A synced invoice of the same series with DPS number 42, issued before the app.
   new InvoiceRepository(db).upsertSynced(a, emitterId, providerInvoice(), null);
   expect(new EmitterRepository(db).reserveDpsNumber(a, emitterId)).toBe(43);
+});
+
+test('a sync never adopts an invoice of another system that took the same DPS number', () => {
+  const { a, emitterId } = setup();
+  const invoices = new InvoiceRepository(db);
+  const invoice = providerInvoice();
+  const id = invoices.createPending(a, {
+    emitterId,
+    dpsId: invoice.dps.id,
+    dpsSeries: '900',
+    dpsNumber: 42,
+    competence: '2026-09-30',
+    serviceCents: 99900,
+    description: 'Outro serviço',
+    customerId: null,
+    customerDocument: '11222333000181',
+    customerName: 'Outro Cliente',
+    serviceCode: '010101',
+    environment: 'producao_restrita',
+    templateOf: 't',
+    createdBy: a.userId,
+  });
+  invoices.markUnknown(a, id, 'timeout');
+  expect(invoices.upsertSynced(a, emitterId, invoice, null).created).toBe(true);
+  expect(invoices.issueState(a, id)?.status).toBe('rejected');
+  expect(invoices.list(a, { limit: 10, offset: 0 }).total).toBe(2);
 });

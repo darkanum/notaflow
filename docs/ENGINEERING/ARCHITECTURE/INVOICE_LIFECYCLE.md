@@ -28,17 +28,17 @@ A synced invoice starts as `issued` or `cancelled`. Only an invoice issued by th
 
 ## E0014
 
-E0014 means "an NFS-e already exists for this DPS". The issuer then looks the invoice up by DPS id and returns it. The service accepts it only when its amount and competence match the request. Otherwise another system used that DPS number, and the row becomes `rejected` with E0014, so the user issues again with the next number.
+E0014 means "an NFS-e already exists for this DPS". The issuer then looks the invoice up by DPS id and returns it. The service accepts it only when its competence, amount, description, and customer document match the pending row (`isOwnInvoice`). Otherwise another system used that DPS number, and the row becomes `rejected` with E0014, so the user issues again with the next number.
 
 ## Reconcile
 
-`POST /api/accounts/:accountId/invoices/:invoiceId/reconcile`, for a `pending` or `unknown` row:
+`POST /api/accounts/:accountId/invoices/:invoiceId/reconcile`, for a `pending` or `unknown` row, always in the row's own environment (the emitter may have switched since):
 
 1. `GET /dps/{id}` at the Sefin. Found: the row becomes `issued`, after the same check as above.
 2. Not found: the app resends the **same** DPS number with a fresh issue date. The pending row keeps everything the resend needs, including the foreign amount.
 3. Still uncertain: the row stays `unknown`.
 
-The app never resends blindly. The ADN sync can also complete an `unknown` row: an invoice with the same emitter and DPS id takes over that row instead of adding a second one.
+The app never resends blindly. The ADN sync can also complete an `unknown` row: an invoice with the same emitter and DPS id takes over that row instead of adding a second one, after the same `isOwnInvoice` check. When the check fails, the row becomes `rejected` with E0014 and the synced invoice gets its own row.
 
 ## Cancel
 

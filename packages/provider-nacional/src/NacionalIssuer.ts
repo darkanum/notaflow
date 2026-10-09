@@ -4,6 +4,7 @@ import type {
   InvoiceIssuer,
   IssueOutcome,
   IssueRequest,
+  ProviderEvent,
   ProviderInvoice,
 } from '@notaflow/core';
 import { NodeSigner } from '@notaflow/signer-node';
@@ -88,6 +89,15 @@ export class NacionalIssuer implements InvoiceIssuer {
     if (result.kind === 'rejected') {
       return { kind: 'rejected', error: { code: result.error.codigo, message: result.error.descricao } };
     }
-    return { kind: 'cancelled', event: result.eventXml ? parseEventXml(result.eventXml) : null };
+    return { kind: 'cancelled', event: result.eventXml ? readEvent(result.eventXml) : null };
+  }
+}
+
+// The Sefin registered the event; an XML the parser cannot read must not hide that.
+function readEvent(xml: string): ProviderEvent | null {
+  try {
+    return parseEventXml(xml);
+  } catch {
+    return null;
   }
 }

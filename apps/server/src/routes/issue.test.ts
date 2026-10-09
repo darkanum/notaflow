@@ -152,3 +152,20 @@ test('the exchange rate route returns the PTAX sell closing rate', async () => {
     source: 'PTAX venda, fechamento',
   });
 });
+
+test('a DPS number used outside the app for the same amount but another customer is not ours', async () => {
+  const { a, headers, templateInvoiceId } = await withTemplate(t);
+  await issueExportOnFake(t.fake, {
+    number: 7,
+    competence: '2026-09-30',
+    amounts: { serviceCents: 1813560 },
+    customer: { document: { type: 'NIF', value: '99-9999999' }, name: 'Another Customer LLC' },
+  });
+  const response = await t.app.inject({
+    method: 'POST',
+    url: `/api/accounts/${a.accountId}/invoices/issue`,
+    headers,
+    payload: { templateInvoiceId, competence: '2026-09-30', serviceCents: 1813560, foreignAmountCents: 200000 },
+  });
+  expect(response.json()).toMatchObject({ status: 'rejected', errors: [{ code: 'E0014' }] });
+});

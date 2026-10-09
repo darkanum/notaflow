@@ -8,6 +8,21 @@ import { emitters, invoiceEvents, invoices } from '../db/schema';
 export type InvoiceStatus = (typeof invoices.$inferSelect)['status'];
 // Cancellation, cancellation by substitution, cancellation granted after fiscal analysis, ex officio.
 export const CANCELLING_EVENTS = ['101101', '105102', '105104', '305101'];
+export const DPS_NUMBER_TAKEN =
+  'O número da DPS já foi usado por outra NFS-e; emita de novo para usar o próximo.';
+
+// A resend of our own DPS reproduces these values; another system's invoice with the same number does not.
+export function isOwnInvoice(
+  row: { competence: string; serviceCents: number; description: string; customerDocument: string | null },
+  invoice: ProviderInvoice,
+): boolean {
+  return (
+    row.competence === invoice.competence &&
+    row.serviceCents === invoice.amounts.serviceCents &&
+    row.description === invoice.service.description &&
+    row.customerDocument === (invoice.customer?.document?.value ?? null)
+  );
+}
 
 export interface InvoiceFilter {
   emitterId?: string;
@@ -67,7 +82,13 @@ export class InvoiceRepository {
     }
     // The row the app created for this DPS, left pending or unknown when the Sefin did not answer.
     const awaiting = this.db
-      .select({ id: invoices.id })
+      .select({
+        id: invoices.id,
+        competence: invoices.competence,
+        serviceCents: invoices.serviceCents,
+        description: invoices.description,
+        customerDocument: invoices.customerDocument,
+      })
       .from(invoices)
       .where(
         and(
@@ -77,9 +98,20 @@ export class InvoiceRepository {
         ),
       )
       .get();
-    if (awaiting) {
+    if (awaiting && isOwnInvoice(awaiting, invoice)) {
       this.promote(awaiting.id, invoice);
       return { id: awaiting.id, created: false };
+    }
+    if (awaiting) {
+      this.db
+        .update(invoices)
+        .set({
+          status: 'rejected',
+          sefinMessages: [{ code: 'E0014', message: DPS_NUMBER_TAKEN }],
+          updatedAt: new Date(),
+        })
+        .where(eq(invoices.id, awaiting.id))
+        .run();
     }
     const id = randomUUID();
     this.db
@@ -291,6 +323,7 @@ export class InvoiceRepository {
       this.db
         .select({
           status: invoices.status,
+          environment: invoices.environment,
           dpsId: invoices.dpsId,
           dpsSeries: invoices.dpsSeries,
           dpsNumber: invoices.dpsNumber,
@@ -301,6 +334,7 @@ export class InvoiceRepository {
           foreignAmountCents: invoices.foreignAmountCents,
           description: invoices.description,
           customerId: invoices.customerId,
+          customerDocument: invoices.customerDocument,
         })
         .from(invoices)
         .innerJoin(emitters, eq(emitters.id, invoices.emitterId))

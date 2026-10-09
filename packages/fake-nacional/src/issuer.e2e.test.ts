@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { NacionalClient, NacionalIssuer } from '@notaflow/provider-nacional';
+import { gzipBase64, NacionalClient, NacionalIssuer } from '@notaflow/provider-nacional';
 import { loadCertificate } from '@notaflow/signer-node';
 import { makeTestCertificate } from '@notaflow/test-kit';
 import { Agent } from 'undici';
@@ -71,5 +71,15 @@ test('cancel registers the event and returns it parsed', async () => {
   expect(cancelled).toMatchObject({ kind: 'cancelled', event: { code: '101101', reasonCode: '1' } });
   expect(await issuer.cancel(issued.invoice.accessKey, '1', 'Valor do serviço incorreto')).toMatchObject({
     kind: 'rejected',
+  });
+});
+
+test('a registered cancel whose event XML does not parse is still cancelled', async () => {
+  const issued = await issuer.issue(request(6));
+  if (issued.kind !== 'issued') throw new Error('not issued');
+  fake.next('event', { kind: 'reply', status: 201, body: { eventoXmlGZipB64: gzipBase64('<evento>unexpected</evento>') } });
+  expect(await issuer.cancel(issued.invoice.accessKey, '1', 'Valor do serviço incorreto')).toEqual({
+    kind: 'cancelled',
+    event: null,
   });
 });
