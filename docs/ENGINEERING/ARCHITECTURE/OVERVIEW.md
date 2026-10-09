@@ -20,6 +20,7 @@ cloudflared ──► server (Fastify) ──► provider "nacional" ──► S
 | `packages/test-kit` | Test-only helpers, such as self-signed e-CNPJ certificates. |
 | `packages/signer-node` | Loads a `.pfx` and signs XML (`Signer` port). |
 | `packages/provider-nacional` | DPS and event XML, and the Sefin and ADN client. |
+| `packages/fake-nacional` | In-memory fake of the Sefin and the ADN for development and tests. Never in production. |
 | `services/signer-py` | Python `Signer`, kept as plan B. |
 | `apps/server` | API, persistence, vault, jobs, authorization (Stage 1a). |
 | `apps/web` | UI (Stage 1a). |
@@ -28,7 +29,7 @@ cloudflared ──► server (Fastify) ──► provider "nacional" ──► S
 
 **`Signer`** signs one element of an XML document by its `Id`, and places the `Signature` right after that element. It has two profiles: `rsa-sha1-c14n` and `rsa-sha256-exc-c14n`. The Stage 0 spike decides which implementation and profile production uses.
 
-**`InvoiceProvider`** (Stage 1a) is what a new invoice system implements: issue, query, sync, cancel, and parse XML into the core model. The national system is the first one.
+**`InvoiceProvider`** is what an invoice system implements. The read side (Stage 1a) checks the connection, fetches documents since a cursor (`fetchSince`), and gets one invoice by access key. Issue and cancel join in Stage 1b. `NacionalProvider` is the national implementation.
 
 **`CertificateStore`** (Stage 1a) stores and loads tenant certificates. Each certificate is encrypted with its own data key, and `NFSE_MASTER_KEY` wraps that key.
 

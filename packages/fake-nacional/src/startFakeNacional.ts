@@ -6,7 +6,7 @@ import {
   gunzipBase64,
   gzipBase64,
 } from '@notaflow/provider-nacional';
-import { buildAccessKey, buildNfseXml, readDps } from './fakeXml';
+import { buildAccessKey, buildEventXml, buildNfseXml, readDps } from './fakeXml';
 
 export type FakeRoute = 'issue' | 'getNfse' | 'getDps' | 'event' | 'dfe' | 'convenio';
 export type FakeOutcome =
@@ -79,6 +79,19 @@ export async function startFakeNacional(
       pattern: /^\/SefinNacional\/dps\/([0-9A-Z]+)$/,
       handle: getDps,
     },
+    {
+      route: 'event',
+      method: 'POST',
+      pattern: /^\/SefinNacional\/nfse\/([0-9A-Z]{50})\/eventos$/,
+      handle: event,
+    },
+    { route: 'dfe', method: 'GET', pattern: /^\/adn\/contribuintes\/DFe\/([0-9]+)$/, handle: dfe },
+    {
+      route: 'convenio',
+      method: 'GET',
+      pattern: /^\/adn\/parametrizacao\/([0-9]{7})\/convenio$/,
+      handle: convenio,
+    },
   ];
 
   function issue(_match: RegExpMatchArray, body: string): Reply {
@@ -135,6 +148,81 @@ export async function startFakeNacional(
     // Stage 0 run 2: the real Sefin answers an unknown DPS id with a JSON 404.
     if (!accessKey) return reject(404, 'E0404', 'DPS não encontrada.');
     return { status: 200, body: { idDps: match[1], chaveAcesso: accessKey } };
+  }
+
+  function event(match: RegExpMatchArray, body: string): Reply {
+    const invoice = state.invoices.get(match[1] ?? '');
+    if (!invoice) return reject(404, 'E0404', 'NFS-e não encontrada.');
+    const requestXml = gunzipBase64(
+      (JSON.parse(body) as { pedidoRegistroEventoXmlGZipB64: string })
+        .pedidoRegistroEventoXmlGZipB64,
+    );
+    if (!requestXml.startsWith('<?xml')) {
+      return reject(400, 'E1229', 'Xml não está utilizando codificação UTF-8.');
+    }
+    if (invoice.cancelled) {
+      // The real rejection body is unknown (RFC Stage 0 Results); this is the shape the client reads.
+      return { status: 400, body: { erro: { Codigo: 'E0840', Descricao: 'NFS-e já cancelada.' } } };
+    }
+    const code = /<e([0-9]{6})>/.exec(requestXml)?.[1] ?? '101101';
+    const eventXml = buildEventXml({
+      accessKey: invoice.accessKey,
+      code,
+      processedAt: formatBrasiliaDateTime(new Date()),
+      requestXml,
+    });
+    invoice.cancelled = code === '101101' || invoice.cancelled;
+    state.addDfe({
+      accessKey: invoice.accessKey,
+      emitterCnpj: invoice.emitterCnpj,
+      type: 'EVENTO',
+      eventType: code,
+      xml: eventXml,
+    });
+    return { status: 201, body: { eventoXmlGZipB64: gzipBase64(eventXml) } };
+  }
+
+  function dfe(match: RegExpMatchArray, _body: string, url: URL): Reply {
+    const after = Number(match[1]);
+    const cnpj = url.searchParams.get('cnpjConsulta');
+    const entries = state.dfe.filter((e) => e.nsu > after && e.emitterCnpj === cnpj).slice(0, 50);
+    if (entries.length === 0) {
+      return {
+        status: 404,
+        body: { StatusProcessamento: 'NENHUM_DOCUMENTO_LOCALIZADO', LoteDFe: [], Erros: [] },
+      };
+    }
+    return {
+      status: 200,
+      body: {
+        StatusProcessamento: 'DOCUMENTOS_LOCALIZADOS',
+        LoteDFe: entries.map((e) => ({
+          NSU: e.nsu,
+          ChaveAcesso: e.accessKey,
+          TipoDocumento: e.type,
+          ...(e.eventType ? { TipoEvento: e.eventType } : {}),
+          ArquivoXml: gzipBase64(e.xml),
+          DataHoraGeracao: e.createdAt,
+        })),
+        Erros: [],
+      },
+    };
+  }
+
+  function convenio(): Reply {
+    return {
+      status: 200,
+      body: {
+        parametrosConvenio: {
+          aderenteAmbienteNacional: 1,
+          aderenteEmissorNacional: 1,
+          situacaoEmissaoPadraoContribuintesRFB: 1,
+          aderenteMAN: 0,
+          permiteAproveitametoDeCreditos: true,
+        },
+        mensagem: 'Parâmetros do convênio recuperados com sucesso.',
+      },
+    };
   }
 
   function reject(status: number, code: string, message: string): Reply {

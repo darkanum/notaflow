@@ -14,7 +14,8 @@
     "prepare": "git config core.hooksPath .githooks",
     "typecheck:root": "tsc -p tsconfig.json",
     "spike:sefin": "tsx --env-file=.env.local spikes/2026-10-sefin/run.ts",
-    "spike:sefin:cancel": "tsx --env-file=.env.local spikes/2026-10-sefin/cancel.ts"
+    "spike:sefin:cancel": "tsx --env-file=.env.local spikes/2026-10-sefin/cancel.ts",
+    "fake:nacional": "tsx packages/fake-nacional/src/cli.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

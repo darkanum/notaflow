@@ -1,4 +1,10 @@
-import { buildDpsXml, gzipBase64, NacionalClient } from '@notaflow/provider-nacional';
+import {
+  buildCancelEventXml,
+  buildDpsXml,
+  type DpsInput,
+  gzipBase64,
+  NacionalClient,
+} from '@notaflow/provider-nacional';
 import { Agent } from 'undici';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { type FakeNacional, startFakeNacional } from './index';
@@ -69,5 +75,105 @@ describe('lookups', () => {
 
   test('an unknown DPS id is a JSON 404, so the client says not_found', async () => {
     expect(await client.findByDpsId(buildDpsXml(dpsInput).id)).toEqual({ kind: 'not_found' });
+  });
+});
+
+const KEY_OF = async (input: DpsInput = dpsInput): Promise<string> => {
+  const result = await client.issue(buildDpsXml(input).xml);
+  if (result.kind !== 'issued') throw new Error('not issued');
+  return result.accessKey;
+};
+
+function cancelXml(accessKey: string): string {
+  return buildCancelEventXml({
+    environment: 'producao_restrita',
+    requestedAt: new Date(),
+    appVersion: 'notaflow-test',
+    authorCnpj: '12345678000195',
+    accessKey,
+    reason: '1',
+    justification: 'Teste de cancelamento no fake',
+  }).xml;
+}
+
+describe('events', () => {
+  test('registers a cancellation and returns the event XML', async () => {
+    const accessKey = await KEY_OF();
+    const result = await client.registerEvent(accessKey, cancelXml(accessKey));
+    expect(result.kind).toBe('registered');
+    expect(result.kind === 'registered' && result.eventXml).toContain(
+      `<chNFSe>${accessKey}</chNFSe>`,
+    );
+  });
+
+  test('a second cancellation is rejected', async () => {
+    const accessKey = await KEY_OF();
+    await client.registerEvent(accessKey, cancelXml(accessKey));
+    expect(await client.registerEvent(accessKey, cancelXml(accessKey))).toMatchObject({
+      kind: 'rejected',
+      error: { codigo: 'E0840' },
+    });
+  });
+});
+
+describe('ADN feed', () => {
+  test('lists the NFS-e and the event of the CNPJ in NSU order', async () => {
+    const accessKey = await KEY_OF();
+    await client.registerEvent(accessKey, cancelXml(accessKey));
+    const batch = await client.fetchDfe(0, '12345678000195');
+    expect(batch.status).toBe('DOCUMENTOS_LOCALIZADOS');
+    expect(batch.documents.map((d) => [d.nsu, d.type])).toEqual([
+      [1, 'NFSE'],
+      [2, 'EVENTO'],
+    ]);
+  });
+
+  test('answers 404 NENHUM_DOCUMENTO_LOCALIZADO past the end and for another CNPJ', async () => {
+    await KEY_OF();
+    expect((await client.fetchDfe(1, '12345678000195')).status).toBe('NENHUM_DOCUMENTO_LOCALIZADO');
+    expect((await client.fetchDfe(0, '98765432000110')).documents).toEqual([]);
+  });
+
+  test('returns at most 50 documents per batch', async () => {
+    for (let n = 1; n <= 51; n++) await KEY_OF({ ...dpsInput, number: n });
+    expect((await client.fetchDfe(0, '12345678000195')).documents).toHaveLength(50);
+    expect((await client.fetchDfe(50, '12345678000195')).documents).toHaveLength(1);
+  });
+});
+
+describe('convênio and scenarios', () => {
+  test('the convênio says the municipality joined the national emitter', async () => {
+    expect(await client.checkConvenio('3550308')).toMatchObject({
+      parametrosConvenio: { aderenteEmissorNacional: 1 },
+    });
+  });
+
+  test('a reply scenario answers once, then the route behaves normally', async () => {
+    fake.next('dfe', { kind: 'reply', status: 429, body: {} });
+    await expect(client.fetchDfe(0, '12345678000195')).rejects.toMatchObject({ retryable: true });
+    expect((await client.fetchDfe(0, '12345678000195')).status).toBe('NENHUM_DOCUMENTO_LOCALIZADO');
+  });
+
+  test('a delay scenario stores the invoice although the client times out', async () => {
+    fake.next('issue', { kind: 'delay', ms: 600 });
+    const { id, xml } = buildDpsXml(dpsInput);
+    expect((await client.issue(xml)).kind).toBe('uncertain');
+    expect((await client.findByDpsId(id)).kind).toBe('found');
+  });
+
+  test('POST /__fake/next queues a scenario over HTTP', async () => {
+    await fetch(fake.urls.sefin.replace('/SefinNacional', '/__fake/next'), {
+      method: 'POST',
+      body: JSON.stringify({ route: 'convenio', kind: 'reply', status: 503, body: 'down' }),
+    });
+    await expect(client.checkConvenio('3550308')).rejects.toMatchObject({ status: 503 });
+  });
+
+  test('reset clears invoices and scenarios', async () => {
+    await KEY_OF();
+    fake.next('convenio', { kind: 'reply', status: 503, body: 'down' });
+    fake.reset();
+    expect((await client.fetchDfe(0, '12345678000195')).documents).toEqual([]);
+    await expect(client.checkConvenio('3550308')).resolves.toBeTruthy();
   });
 });
