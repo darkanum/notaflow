@@ -370,6 +370,16 @@ Stage 1a is accepted. On the owner's machine, with the real certificate:
 - The first sync after onboarding read produção restrita and stored the 3 invoices of the Stage 0 spike, all cancelled. So the restrita ADN does deliver the emitter's documents; in Stage 0 it had not processed them yet when the spike read it minutes after the issues.
 - After the switch to production (audited), "Sincronizar agora" listed the emitter's 3 production invoices, all issued. Invoices where the emitter is the customer were not listed. Nothing was issued or cancelled.
 
+### Stage 1b acceptance (2026-10-09)
+
+Stage 1b is accepted in produção restrita, on the owner's machine, with the real certificate and the Malphas screens:
+
+- The emitter was switched to produção restrita. "Emitir parecida" from a Stage 0 spike invoice (an export template) filled the BRL amount from the real PTAX (sell, closing bulletin, 2026-09-30) and showed the changed fields in the review.
+- A double click on "Emitir em produção restrita" issued one invoice: one pending row, one audit entry, one NFS-e.
+- The invoice was cancelled through the dialog (reason 9). The Sefin registered event 101101, and the invoice ended `cancelled`.
+- A second cancel of the same invoice was refused with HTTP 400 and `E0840` ("o evento de Cancelamento de NFS-e já está vinculado à NFS-e"). The code is the one the app already treats as "already cancelled". The body carries `erro` as an **array**, a shape the client did not read; the client now reads it (test first).
+- Counts: 1 invoice issued, 1 cancelled, none left active. The emitter went back to production afterwards, and its production invoices were not touched.
+
 ## Open Questions
 
 - [ ] Can a rejected DPS number be reused, or is it consumed? Still no evidence: the spike's invalid DPS (zero amount) was issued. Until it is answered, the app never reuses a number; a rejected row keeps its number, and the next issue takes a new one.
@@ -377,5 +387,6 @@ Stage 1a is accepted. On the owner's machine, with the real certificate:
 - [x] Cancellation reason codes (`cMotivo`): 1 Erro na Emissão, 2 Serviço não Prestado, 9 Outros. The justification (`xMotivo`) has 15 to 255 characters.
 - [x] Node or Python `Signer`: Node, `rsa-sha256-exc-c14n` by default. See [Signer decision](#signer-decision).
 - [x] The Sefin error code for "an NFS-e already exists for this DPS" is E0014 ("Conjunto de Série, Número, Código do Município Emissor e CNPJ/CPF informado nesta DPS já existe em uma NFS-e gerada a partir de uma DPS enviada anteriormente"). Stage 1a maps E0014 to a lookup by DPS id, not to `rejected`.
+- [x] The Sefin code for "cancellation already registered" is E0840, in a body where `erro` is an array (Stage 1b acceptance).
 - [ ] BSL parameters. Proposal: Change Date four years after each release, Change License Apache-2.0, no Additional Use Grant (production use needs a commercial license).
 - [x] DNS: `vapulab.com` is already a Cloudflare zone of Lincoln's account, so no nameserver migration is needed. Stage 1c points `notaflow.vapulab.com` at the VM.

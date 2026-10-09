@@ -31,7 +31,7 @@ export interface IssueInput {
   customerId?: string;
 }
 
-// Sefin refusals that mean the invoice is already cancelled. E0840 is the fake's; the acceptance checks the real one.
+// Sefin refusals that mean the invoice is already cancelled (E0840, confirmed in the Stage 1b acceptance).
 export const ALREADY_CANCELLED_CODES = ['E0840'];
 
 export interface IssueResultView {
