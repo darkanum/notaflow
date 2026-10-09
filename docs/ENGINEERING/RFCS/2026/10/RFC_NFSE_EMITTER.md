@@ -283,6 +283,7 @@ A `suspended` account can log in and read, but cannot issue or cancel. This is t
 - **Provider:** synthetic XML fixtures. A round-trip test (XML to draft to DPS) that loses no field. The generated DPS validates against the official XSD schemas, which are public and live in the repository.
 - **Signer:** each implementation signs, and an independent verifier checks the signature. The two implementations verify each other.
 - **Server:** the route sweep for authentication and isolation. Integration tests against a mocked Sefin: rejection, timeout to `unknown` to reconciliation, and 429 during sync.
+- **Local fake (`packages/fake-nacional`):** an in-memory Sefin and ADN for development and for server integration tests. It copies behavior seen from the real system, such as E0014, E1229, and the JSON 404. It does not check signatures.
 - **End to end in produção restrita:** runs locally only, with a real certificate. Never in CI.
 - **CI (GitHub Actions):** lint, typecheck, tests, `gitleaks`.
 
@@ -299,7 +300,9 @@ docs/ENGINEERING/
   ARCHITECTURE/                   OVERVIEW, TENANCY, PROVIDERS, CERTIFICATE_VAULT, INVOICE_LIFECYCLE
   CONVENTIONS/                    DOCUMENTATION_STANDARD, WRITING_STYLE, SECRETS, CODE_COMMENTS
   RFCS/2026/10/RFC_NFSE_EMITTER.md
-  PLANS/2026/10/PLAN_STAGE_1.md
+  PLANS/2026/10/PLAN_STAGE_1A_1_PROVIDER_READ.md
+  PLANS/2026/10/PLAN_STAGE_1A_2_SERVER_FOUNDATION.md
+  PLANS/2026/10/PLAN_STAGE_1A_3_SYNC_AND_UI.md
 docs/TUTORIALS/                   DEPLOY_ON_VM, MIGRATE_DNS_TO_CLOUDFLARE, ONBOARD_ACCOUNT
 docs/TEMPLATES/                   RFC, PLAN, TUTORIAL
 ```
