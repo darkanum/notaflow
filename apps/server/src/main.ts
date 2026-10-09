@@ -28,6 +28,7 @@ try {
         log: (message, data) => app.log.info(data, message),
       }),
     SYNC_INTERVAL_MS,
+    (error) => app.log.error({ err: error }, 'scheduled sync failed'),
   );
 } catch (error) {
   if (error instanceof ConfigError) {

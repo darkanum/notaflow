@@ -26,14 +26,21 @@ export async function runAllOnce(deps: {
   }
 }
 
-export function startScheduler(run: () => Promise<void>, intervalMs: number): { stop(): void } {
+export function startScheduler(
+  run: () => Promise<void>,
+  intervalMs: number,
+  onError: (error: unknown) => void,
+): { stop(): void } {
   let busy = false;
   const timer = setInterval(() => {
     if (busy) return;
     busy = true;
-    run().finally(() => {
-      busy = false;
-    });
+    // An unhandled rejection here would end the whole server process.
+    run()
+      .catch(onError)
+      .finally(() => {
+        busy = false;
+      });
   }, intervalMs);
   return { stop: () => clearInterval(timer) };
 }
