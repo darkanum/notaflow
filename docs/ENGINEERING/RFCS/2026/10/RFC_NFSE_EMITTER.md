@@ -68,7 +68,7 @@ Users log in through Cloudflare Access. The app decides who can do what, through
 ### Architecture
 
 ```
-nfse.vapulab.com
+notaflow.vapulab.com
    │  Cloudflare Access (email one-time PIN now, Google later)
    ▼
 cloudflared ──► server (Fastify) ──► provider "nacional" ──► Sefin / ADN (mTLS)
@@ -85,7 +85,7 @@ pnpm monorepo, TypeScript end to end.
 
 | Package | Responsibility | Depends on |
 | --- | --- | --- |
-| `packages/core` | Pure domain: `Account`, `Emitter`, `Customer`, `Invoice`, `DraftInvoice`. Defines the ports `InvoiceProvider`, `Signer`, `CertificateStore`, and the repositories. No I/O. | nothing |
+| `packages/core` | Pure domain: `Account`, `Emitter`, `Customer`, `Invoice`, `DraftInvoice`. Defines the ports `InvoiceProvider`, `InvoiceIssuer`, `Signer`, `CertificateStore`, and the repositories. No I/O. | nothing |
 | `packages/provider-nacional` | `InvoiceProvider` for the national system: build the DPS, issue, query, sync the ADN, cancel. Converts XML to and from the `core` model. | `core` |
 | `packages/signer-node` | `Signer` with `xml-crypto` and `node-forge`. | `core` |
 | `services/signer-py` | `Signer` as a FastAPI sidecar with `signxml` and `lxml`. Exists only if the spike needs it. | none |
@@ -141,10 +141,10 @@ Two entry points:
 
 Steps:
 
-1. **Form.** The user can edit the competence date, amounts, description, service, and customer. The customer field searches the register and offers "new customer", which saves the record with the issue. The issue date is always "now", because the Sefin refuses a future date.
+1. **Form.** The user can edit the competence date, amounts, description, service, and customer. For an export invoice, the BRL amount is suggested from the PTAX sell rate of the closing bulletin on the competence date (or the last business day before it) and stays editable. The customer field searches the register and offers "new customer", which saves the record with the issue. The issue date is always "now", because the Sefin refuses a future date.
 2. **Review.** A confirmation screen shows the environment, the computed taxes, and every field that differs from the template, highlighted.
 3. **Send, protected against duplicates.**
-   - In one transaction, the app reserves the next DPS number and creates the invoice with `status = pending`.
+   - In one transaction, the app reserves the next DPS number and creates the invoice with `status = pending`. The number is never one that the emitter already used in its series.
    - It builds the DPS, signs it, and sends it.
    - Success: `issued`, with access key and XML.
    - Validation rejection: `rejected`. The form shows the Sefin messages next to the fields.
@@ -260,7 +260,7 @@ A `suspended` account can log in and read, but cannot issue or cancel. This is t
 | **0. Spike** | Repository and docs skeleton. A script that signs one DPS with both signers, issues and cancels in produção restrita, and reads `/DFe`. | Signer decision recorded here. The three spike questions below have evidence. |
 | **1a. Read** | `core`, `provider-nacional` (parser, sync, access-key lookup), certificate vault, accounts, users, roles, admin panel. | Vapulab account created, certificate uploaded, invoices issued to CoGrader listed from the ADN. |
 | **1b. Write** | Customer register, issue from invoice or customer, cancel. | In produção restrita: issue similar, edit amounts and customer, cancel. A simulated timeout ends in `unknown` and reconciles with no duplicate. |
-| **1c. Production** | Docker Compose on the VM, `cloudflared`, Access application, daily backup, DNS migration checklist. | `nfse.vapulab.com` is live. The first real Vapulab invoice to CoGrader is issued, with Lincoln watching. |
+| **1c. Production** | Docker Compose on the VM, `cloudflared`, Access application, daily backup, DNS migration checklist. | `notaflow.vapulab.com` is live. The first real Vapulab invoice to CoGrader is issued, with Lincoln watching. |
 
 ### Planned, not in Stage 1
 
@@ -372,10 +372,10 @@ Stage 1a is accepted. On the owner's machine, with the real certificate:
 
 ## Open Questions
 
-- [ ] Can a rejected DPS number be reused, or is it consumed? The spike did not answer it: its invalid DPS (zero amount) was issued. Stage 1a repeats the test with a DPS that the Sefin rejects for a validation error.
+- [ ] Can a rejected DPS number be reused, or is it consumed? Still no evidence: the spike's invalid DPS (zero amount) was issued. Until it is answered, the app never reuses a number; a rejected row keeps its number, and the next issue takes a new one.
 - [x] The endpoint to query an invoice by DPS id: `GET /dps/{id}`. HTTP 404 means no NFS-e exists for that DPS.
 - [x] Cancellation reason codes (`cMotivo`): 1 Erro na Emissão, 2 Serviço não Prestado, 9 Outros. The justification (`xMotivo`) has 15 to 255 characters.
 - [x] Node or Python `Signer`: Node, `rsa-sha256-exc-c14n` by default. See [Signer decision](#signer-decision).
 - [x] The Sefin error code for "an NFS-e already exists for this DPS" is E0014 ("Conjunto de Série, Número, Código do Município Emissor e CNPJ/CPF informado nesta DPS já existe em uma NFS-e gerada a partir de uma DPS enviada anteriormente"). Stage 1a maps E0014 to a lookup by DPS id, not to `rejected`.
 - [ ] BSL parameters. Proposal: Change Date four years after each release, Change License Apache-2.0, no Additional Use Grant (production use needs a commercial license).
-- [ ] Lincoln migrates the `vapulab.com` nameservers from Hostinger to Cloudflare. The A, two MX, and SPF records must be present in Cloudflare before the switch.
+- [x] DNS: `vapulab.com` is already a Cloudflare zone of Lincoln's account, so no nameserver migration is needed. Stage 1c points `notaflow.vapulab.com` at the VM.

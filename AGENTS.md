@@ -44,3 +44,4 @@ NotaFlow is a multi-tenant web app that issues, copies, and cancels Brazilian se
 | `pnpm seed:admin <email> <name>` | Create or promote a platform admin |
 | `pnpm fake:nacional` | Local fake of the Sefin and the ADN on port 4010 |
 | `pnpm spike:sefin` | Stage 0 spike against produção restrita (needs `.env.local`) |
+| `pnpm spike:template-check` | Read-only check that every invoice in the local database can serve as a template |

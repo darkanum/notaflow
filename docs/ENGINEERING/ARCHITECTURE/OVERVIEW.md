@@ -3,7 +3,7 @@
 NotaFlow is one app container behind a Cloudflare tunnel. A Fastify server holds the domain, the certificate vault, and the jobs, and it serves the React UI. Each invoice system is a provider package behind a port. The full design is in the [RFC](../RFCS/2026/10/RFC_NFSE_EMITTER.md).
 
 ```
-nfse.vapulab.com
+notaflow.vapulab.com
    │  Cloudflare Access (email one-time PIN now, Google later)
    ▼
 cloudflared ──► server (Fastify) ──► provider "nacional" ──► Sefin / ADN (mTLS)
@@ -29,7 +29,9 @@ cloudflared ──► server (Fastify) ──► provider "nacional" ──► S
 
 **`Signer`** signs one element of an XML document by its `Id`, and places the `Signature` right after that element. It has two profiles: `rsa-sha1-c14n` and `rsa-sha256-exc-c14n`. The Stage 0 spike decides which implementation and profile production uses.
 
-**`InvoiceProvider`** is what an invoice system implements. The read side (Stage 1a) checks the connection, fetches documents since a cursor (`fetchSince`), and gets one invoice by access key. Issue and cancel join in Stage 1b. `NacionalProvider` is the national implementation.
+**`InvoiceProvider`** is what an invoice system implements. The read side (Stage 1a) checks the connection, fetches documents since a cursor (`fetchSince`), and gets one invoice by access key. `NacionalProvider` is the national implementation.
+
+**`InvoiceIssuer`** issues a new invoice from a stored one, finds an invoice by DPS id, and cancels. `NacionalIssuer` is the national implementation. See [Invoice Lifecycle](INVOICE_LIFECYCLE.md).
 
 **`CertificateStore`** stores and loads tenant certificates. Each certificate is encrypted with its own data key, and `NFSE_MASTER_KEY` wraps that key. See [Certificate Vault](CERTIFICATE_VAULT.md); accounts and roles are in [Tenancy](TENANCY.md).
 
