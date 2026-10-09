@@ -1,10 +1,21 @@
+import { useState } from 'react';
 import { api, type InvoiceDetail } from '../api';
 import { EnvironmentBadge } from '../components/EnvironmentBadge';
 import { Layout, errorText } from '../components/Layout';
 import { useAsync } from '../components/useAsync';
 import { formatCents, formatCompetence, formatDate } from '../format';
 import { routeHref } from '../router';
-import { Alert, Badge, Card, Link, SECTION_TITLE_CLASSES, Spinner } from '../ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  buttonClasses,
+  Card,
+  Link,
+  SECTION_TITLE_CLASSES,
+  Spinner,
+} from '../ui';
+import { CancelDialog } from './CancelDialog';
 import { STATUS_TEXT, STATUS_VARIANT } from './InvoicesPage';
 
 const EVENT_TEXT: Record<string, string> = {
@@ -18,6 +29,24 @@ export function InvoiceDetailPage(props: { accountId: string; invoiceId: string 
   const { accountId, invoiceId } = props;
   const url = `/api/accounts/${encodeURIComponent(accountId)}/invoices/${encodeURIComponent(invoiceId)}`;
   const invoice = useAsync(() => api.get<InvoiceDetail>(url), [url]);
+  const [cancelling, setCancelling] = useState(false);
+  const [message, setMessage] = useState<{ variant: 'info' | 'error'; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function verify() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const answer = await api.post<{ status: InvoiceDetail['status'] }>(`${url}/reconcile`, {});
+      setMessage({ variant: 'info', text: `Situação na Sefin: ${STATUS_TEXT[answer.status]}.` });
+      invoice.reload();
+    } catch (error) {
+      setMessage({ variant: 'error', text: errorText(error) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (invoice.error) {
     return (
       <Layout title="Nota" accountId={accountId}>
@@ -40,6 +69,38 @@ export function InvoiceDetailPage(props: { accountId: string; invoiceId: string 
           Voltar para as notas
         </Link>
         <EnvironmentBadge environment={data.environment} />
+      </div>
+      {message && <Alert variant={message.variant}>{message.text}</Alert>}
+      {data.sefinMessages && data.sefinMessages.length > 0 && (
+        <Alert variant={data.status === 'rejected' ? 'error' : 'warning'}>
+          <ul className="flex flex-col gap-1">
+            {data.sefinMessages.map((m) => (
+              <li key={`${m.code}-${m.message}`}>
+                {m.code}: {m.message}
+              </li>
+            ))}
+          </ul>
+        </Alert>
+      )}
+      <div className="flex flex-wrap gap-3">
+        {(data.status === 'issued' || data.status === 'cancelled') && (
+          <a
+            href={routeHref({ name: 'issue', accountId, invoiceId })}
+            className={buttonClasses({ variant: 'primary' })}
+          >
+            Emitir parecida
+          </a>
+        )}
+        {data.status === 'issued' && (
+          <Button variant="danger" onClick={() => setCancelling(true)}>
+            Cancelar nota
+          </Button>
+        )}
+        {(data.status === 'unknown' || data.status === 'pending') && (
+          <Button variant="secondary" disabled={busy} onClick={() => void verify()}>
+            Verificar na Sefin
+          </Button>
+        )}
       </div>
       <Card>
         <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-[max-content_1fr] [&_dt]:text-sm [&_dt]:text-muted [&_dd]:text-fg [&_dd]:break-all">
@@ -89,6 +150,22 @@ export function InvoiceDetailPage(props: { accountId: string; invoiceId: string 
             ))}
           </ul>
         </Card>
+      )}
+      {cancelling && (
+        <CancelDialog
+          open
+          url={url}
+          invoice={data}
+          onClose={() => setCancelling(false)}
+          onDone={(alreadyCancelled) => {
+            setCancelling(false);
+            setMessage({
+              variant: 'info',
+              text: alreadyCancelled ? 'A nota já estava cancelada na Sefin.' : 'Nota cancelada.',
+            });
+            invoice.reload();
+          }}
+        />
       )}
     </Layout>
   );

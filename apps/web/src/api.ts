@@ -93,6 +93,8 @@ export interface InvoiceSummary {
 }
 
 export interface InvoiceDetail extends InvoiceSummary {
+  sefinMessages: { code: string; message: string }[] | null;
+  templateOf: string | null;
   events: {
     code: string;
     reasonCode: string | null;
