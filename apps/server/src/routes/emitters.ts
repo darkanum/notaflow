@@ -102,18 +102,21 @@ export function emitterRoutes(
       const { pfxBase64, password, ...fiscal } = request.body;
       const { pfx, material } = openPfx(pfxBase64, password);
 
-      if (emitters.isCnpjTakenElsewhere(ctx, material.cnpj)) {
-        audit.record({
-          userEmail: actor,
-          accountId: ctx.accountId,
-          action: 'emitter.create',
-          entity: material.cnpj,
-          result: 'refused',
-          detail: 'cnpj_in_other_account',
-        });
-        throw new HttpError(409, 'cnpj_in_other_account');
-      }
-      if (emitters.findByCnpj(ctx, material.cnpj)) throw new HttpError(409, 'emitter_exists');
+      const refuseDuplicate = () => {
+        if (emitters.isCnpjTakenElsewhere(ctx, material.cnpj)) {
+          audit.record({
+            userEmail: actor,
+            accountId: ctx.accountId,
+            action: 'emitter.create',
+            entity: material.cnpj,
+            result: 'refused',
+            detail: 'cnpj_in_other_account',
+          });
+          throw new HttpError(409, 'cnpj_in_other_account');
+        }
+        if (emitters.findByCnpj(ctx, material.cnpj)) throw new HttpError(409, 'emitter_exists');
+      };
+      refuseDuplicate();
 
       try {
         await deps
@@ -133,22 +136,31 @@ export function emitterRoutes(
       }
 
       const sealed = sealCertificate(pfx, password, deps.masterKey);
-      const emitter = deps.db.transaction(() => {
-        const created = emitters.create(ctx, {
-          ...fiscal,
-          cnpj: material.cnpj,
-          companyName: companyNameOf(material),
+      const create = () =>
+        deps.db.transaction(() => {
+          const created = emitters.create(ctx, {
+            ...fiscal,
+            cnpj: material.cnpj,
+            companyName: companyNameOf(material),
+          });
+          certificates.addActive(ctx, created.id, sealed, {
+            cnpj: material.cnpj,
+            subject: material.subject,
+            validFrom: material.notBefore,
+            validTo: material.notAfter,
+            fingerprintSha256: material.fingerprintSha256,
+            uploadedBy: ctx.userId,
+          });
+          return created;
         });
-        certificates.addActive(ctx, created.id, sealed, {
-          cnpj: material.cnpj,
-          subject: material.subject,
-          validFrom: material.notBefore,
-          validTo: material.notAfter,
-          fingerprintSha256: material.fingerprintSha256,
-          uploadedBy: ctx.userId,
-        });
-        return created;
-      });
+      let emitter: ReturnType<typeof create>;
+      try {
+        emitter = create();
+      } catch (error) {
+        // Another request stored this CNPJ during the connection test: answer it like the first check.
+        if (isUniqueViolation(error)) refuseDuplicate();
+        throw error;
+      }
       audit.record({
         userEmail: actor,
         accountId: ctx.accountId,
@@ -268,6 +280,14 @@ export function emitterRoutes(
       });
       return reply.status(204).send();
     },
+  );
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: unknown }).code === 'SQLITE_CONSTRAINT_UNIQUE'
   );
 }
 

@@ -130,6 +130,30 @@ test('a certificate that expires in less than 30 days is flagged', async () => {
   ]);
 });
 
+test('a double submit answers 201 once and 409 emitter_exists, never 500', async () => {
+  const a = seedTenant(t.db, { accountName: 'A', email: 'a@example.com' });
+  const statuses = (
+    await Promise.all([
+      onboard(a.accountId, 'a@example.com'),
+      onboard(a.accountId, 'a@example.com'),
+    ])
+  ).map((r) => r.statusCode);
+  expect(statuses.sort()).toEqual([201, 409]);
+});
+
+test('two accounts racing for one CNPJ: 201 and 409 cnpj_in_other_account, audited', async () => {
+  const a = seedTenant(t.db, { accountName: 'A', email: 'a@example.com' });
+  const b = seedTenant(t.db, { accountName: 'B', email: 'b@example.com' });
+  const responses = await Promise.all([
+    onboard(a.accountId, 'a@example.com'),
+    onboard(b.accountId, 'b@example.com'),
+  ]);
+  const loser = responses.find((r) => r.statusCode !== 201);
+  expect(responses.map((r) => r.statusCode).sort()).toEqual([201, 409]);
+  expect(loser?.json()).toEqual({ error: 'cnpj_in_other_account' });
+  expect(new AuditLog(t.db).list().some((e) => e.result === 'refused')).toBe(true);
+});
+
 test('a member cannot onboard: 403 owner_only', async () => {
   const a = seedTenant(t.db, { accountName: 'A', email: 'm@example.com', role: 'member' });
   expect((await onboard(a.accountId, 'm@example.com')).statusCode).toBe(403);
