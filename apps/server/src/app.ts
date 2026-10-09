@@ -4,8 +4,10 @@ import { registerAuth } from './auth/authHook';
 import type { Config } from './config';
 import type { Database } from './db/openDatabase';
 import { handleError } from './httpError';
+import { nacionalProviderFactory, type ProviderFactory } from './providers/providerFactory';
 import { IdentityRepository } from './repos/IdentityRepository';
 import { adminRoutes } from './routes/admin';
+import { emitterRoutes } from './routes/emitters';
 import { meRoutes } from './routes/me';
 import { memberRoutes } from './routes/members';
 
@@ -19,6 +21,7 @@ export interface AppDeps {
   config: Config;
   db: Database;
   verifyAccessToken?: VerifyAccessToken;
+  providerFactory?: ProviderFactory;
 }
 
 export function buildApp(deps: AppDeps): FastifyInstance {
@@ -44,5 +47,10 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   meRoutes(app);
   adminRoutes(app, db);
   memberRoutes(app, db);
+  emitterRoutes(app, {
+    db,
+    masterKey: config.masterKey,
+    providerFactory: deps.providerFactory ?? nacionalProviderFactory(config.nacionalUrls),
+  });
   return app;
 }
