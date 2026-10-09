@@ -7,6 +7,9 @@
 **References:**
 
 - [Sistema Nacional NFS-e](https://www.nfse.gov.br/) (official portal, technical docs, XSD schemas)
+- [Manual for Sefin API users, v1.2](https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/documentacao-atual/manual-contribuintes-emissor-publico-api-sistema-nacional-nfs-e-v1-2-out2025.pdf)
+- [Manual for ADN API users](https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/documentacao-atual/manual-contribuintes-apis-adn-sistema-nacional-nfse.pdf)
+- [XSD bundle 2026-07-27, alphanumeric CNPJ](https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/producao-restrita/esquemas-nfse-rtc-v1-01-20260727.zip)
 
 ## Table of Contents
 
@@ -20,7 +23,8 @@
 8. [Testing](#testing)
 9. [Documentation](#documentation)
 10. [File Locations](#file-locations)
-11. [Open Questions](#open-questions)
+11. [Stage 0 Results](#stage-0-results)
+12. [Open Questions](#open-questions)
 
 ---
 
@@ -103,12 +107,14 @@ XMLDSig canonicalization is the main technical risk in Node. Signing sits behind
 
 The spike result is recorded in this RFC.
 
+**Decision (2026-10-08): the Node signer, with the `rsa-sha256-exc-c14n` profile as the default.** The Sefin accepted both Node profiles. It refused both Python signatures before the signature check (see [Stage 0 Results](#stage-0-results)). The Python sidecar stays documented as plan B.
+
 ### Flow: onboard an emitter
 
 1. An `owner` uploads the `.pfx` file and its password.
 2. The app opens the certificate, reads the CNPJ and the company name, and checks the validity dates. It refuses a CNPJ that already belongs to another account.
 3. The user completes what the certificate does not carry: municipal registration, municipality (IBGE code), tax regime, and DPS series.
-4. Connection test: a read-only mTLS call (municipal parameters). On success, the certificate becomes active and the first sync starts.
+4. Connection test: a read-only mTLS call, `GET {adn}/parametrizacao/{cMun}/convenio`. The old Sefin municipal-parameter paths return 501. On success, the certificate becomes active and the first sync starts.
 5. A new emitter always starts in `producao_restrita`. A switch to `producao` needs an explicit confirmation and goes to the audit log. The UI always shows a large badge with the current environment.
 
 ### Flow: sync from the ADN
@@ -180,7 +186,7 @@ Amounts are integer cents. Timestamps are UTC. The competence date is `YYYY-MM-D
 
 | Table | Fields | Notes |
 | --- | --- | --- |
-| `emitters` | `account_id`, CNPJ, company name, municipal registration, municipality (IBGE), tax regime, `provider` (`nacional`), `environment` (`producao` / `producao_restrita`), DPS series, next DPS number | CNPJ unique across the platform. |
+| `emitters` | `account_id`, CNPJ (`[0-9A-Z]{14}`, the alphanumeric CNPJ of the 2026-07-27 XSD), company name, municipal registration, municipality (IBGE), tax regime, `provider` (`nacional`), `environment` (`producao` / `producao_restrita`), DPS series, next DPS number | CNPJ unique across the platform. |
 | `certificates` | `emitter_id`, encrypted `.pfx`, encrypted password, wrapped data key, CNPJ, subject, valid from, valid to, SHA-256 fingerprint, `active`, uploaded by, uploaded at | One active certificate per emitter. History is kept. |
 | `customers` | `emitter_id`, document type (CNPJ / CPF / foreign NIF), document, name, municipal registration, structured address (street, number, complement, district, IBGE municipality, ZIP), email, phone, `origin` (`manual` / `imported`), `archived`, list of fields edited by hand | Document unique per emitter. Archive hides, never deletes. |
 | `invoices` | `emitter_id`, `customer_id`, access key, NFS-e number, DPS series and number, `status`, issued at, competence, customer document and name, service code, service amount, ISS, net amount, `origin` (`synced` / `app`), `template_of`, compressed XML, Sefin messages, `created_by` | Access key unique, so the sync does not duplicate an invoice issued by the app. |
@@ -265,6 +271,7 @@ A `suspended` account can log in and read, but cannot issue or cancel. This is t
 - Cancellation by substitution and the fiscal analysis request.
 - Other providers (ABRASF municipal systems, NF-e).
 - Email delivery of the invoice to the customer.
+- Local DANFSe (PDF) renderer in the national layout. The ADN DANFSe API is suspended since 2026-08-03 (NT 008/2026). Lincoln decides in Stage 1b if it moves into Stage 1.
 - Postgres.
 - Terms of use and privacy policy (LGPD). Required before the first paying customer, because the app stores third-party A1 certificates.
 
@@ -317,11 +324,38 @@ Each package has a short `AGENTS.md` that points into `docs/`. File and folder n
 
 ---
 
+## Stage 0 Results
+
+Two runs of `pnpm spike:sefin` against produção restrita on 2026-10-08, with a Simples Nacional ME/EPP emitter in Londrina (IBGE 4113700) and an export DPS (foreign customer with NIF, `tribISSQN` 3, `comExt`, and the `IBSCBS` group). The emitter has no municipal registration, and the Sefin accepted the DPS without `IM`.
+
+| Step | Result |
+| --- | --- |
+| 1. Connection test (`/parametrizacao/{cMun}/convenio`) | HTTP 200, municipality joined the national emitter |
+| 2. Node signer, `rsa-sha1-c14n` | Issued |
+| 2. Node signer, `rsa-sha256-exc-c14n` | Issued |
+| 3. Python signer, both profiles | Rejected, E1228 "Xml declarado com prefixo de namespace" (signxml writes the `ds:` prefix) |
+| 4. DPS number reuse | Not answered: the DPS with a zero amount was issued, not rejected. The resend of the same number got E0014 |
+| 5. Get NFS-e by access key | HTTP 200, XML returned |
+| 6. Cancel (event 101101) | Registered, with SHA1 and with SHA256 signatures |
+| 7. `GET /dps/{id}` for an unknown DPS | HTTP 404 with a JSON body, `not_found` |
+| 8. ADN DFe from NSU 0 | `NENHUM_DOCUMENTO_LOCALIZADO`, although the emitter had issued invoices minutes before |
+
+Every invoice the spike issued was cancelled the same day.
+
+Surprises, all handled in `NacionalClient` or recorded here:
+
+- The first run got E1229 "Xml não está utilizando codificação UTF-8" for every DPS. The Sefin needs the `<?xml version="1.0" encoding="UTF-8"?>` declaration. The client adds it.
+- Sefin error objects use `Codigo` and `Descricao`, capitalized. Some error bodies arrive in Latin-1 (seen with E0014). The client handles both.
+- The Sefin issued a DPS with a zero service amount. The app must refuse a zero amount itself.
+- A cancellation request for an invoice that is already cancelled got a rejection whose body is not in the `erro` shape the client reads. Capture the raw body before Stage 1a maps event errors.
+- The ADN returned no documents for the emitter right after the issues. Find out in Stage 1a whether the ADN distribution has a delay or whether NSU 0 needs another query.
+
 ## Open Questions
 
-- [ ] Spike: can a rejected DPS number be reused, or is it consumed?
-- [ ] Spike: the exact endpoint to query an invoice by DPS id (for `unknown` reconciliation).
-- [ ] Spike: the cancellation reason codes and the minimum justification length.
-- [ ] Spike: Node or Python `Signer`.
+- [ ] Can a rejected DPS number be reused, or is it consumed? The spike did not answer it: its invalid DPS (zero amount) was issued. Stage 1a repeats the test with a DPS that the Sefin rejects for a validation error.
+- [x] The endpoint to query an invoice by DPS id: `GET /dps/{id}`. HTTP 404 means no NFS-e exists for that DPS.
+- [x] Cancellation reason codes (`cMotivo`): 1 Erro na Emissão, 2 Serviço não Prestado, 9 Outros. The justification (`xMotivo`) has 15 to 255 characters.
+- [x] Node or Python `Signer`: Node, `rsa-sha256-exc-c14n` by default. See [Signer decision](#signer-decision).
+- [x] The Sefin error code for "an NFS-e already exists for this DPS" is E0014 ("Conjunto de Série, Número, Código do Município Emissor e CNPJ/CPF informado nesta DPS já existe em uma NFS-e gerada a partir de uma DPS enviada anteriormente"). Stage 1a maps E0014 to a lookup by DPS id, not to `rejected`.
 - [ ] BSL parameters. Proposal: Change Date four years after each release, Change License Apache-2.0, no Additional Use Grant (production use needs a commercial license).
 - [ ] Lincoln migrates the `vapulab.com` nameservers from Hostinger to Cloudflare. The A, two MX, and SPF records must be present in Cloudflare before the switch.

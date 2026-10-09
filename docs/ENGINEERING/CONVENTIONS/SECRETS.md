@@ -1,0 +1,27 @@
+# Secrets
+
+A secret never enters git. The repository is public, so a committed secret is a published secret, even after a revert.
+
+## What is a secret here
+
+| Secret | Where it lives |
+| --- | --- |
+| A tenant `.pfx` certificate and its password | In production: the encrypted vault in the database. Locally: a path outside the repo, named in `.env.local`. |
+| `NFSE_MASTER_KEY` | The VM `.env` file (mode `600`), and a copy in Lincoln's password manager. Never next to a backup. |
+| `TUNNEL_TOKEN`, `CF_ACCESS_AUD`, `CF_ACCESS_TEAM_DOMAIN` | The VM `.env` file. |
+| A real invoice XML, or any real CNPJ, customer name, or amount | Nowhere in the repo. It is tenant data. |
+
+## The guards
+
+- `.gitignore` blocks `*.pfx`, `*.p12`, `*.pem`, `*.key`, `.env*` (except `.env.example`), `data/`, and spike results.
+- The pre-commit hook in `.githooks/` runs `gitleaks` on staged files. `pnpm install` turns the hook on. If `gitleaks` is not installed, the commit is blocked.
+- CI runs `gitleaks` on every push.
+- GitHub secret scanning and push protection are on for the repository.
+
+## Rules
+
+1. Never pass `--no-verify` to get past the hook. Remove the value instead.
+2. Tests use `@notaflow/test-kit` certificates and synthetic data with CNPJ `12345678000195`.
+3. Logs never contain a certificate, a password, the master key, or a full XML.
+4. To inspect a secret, check its length, its hash, or that it parses. Never print it.
+5. If a secret reaches git or a log, rotate it first, then clean up.
