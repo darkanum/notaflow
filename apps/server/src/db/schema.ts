@@ -135,40 +135,48 @@ export const customers = sqliteTable(
   ],
 );
 
-export const invoices = sqliteTable('invoices', {
-  id: id(),
-  emitterId: text('emitter_id')
-    .notNull()
-    .references(() => emitters.id),
-  customerId: text('customer_id').references(() => customers.id),
-  accessKey: text('access_key').unique(),
-  number: text('number'),
-  dpsId: text('dps_id'),
-  dpsSeries: text('dps_series').notNull(),
-  dpsNumber: integer('dps_number').notNull(),
-  status: text('status', {
-    enum: ['pending', 'issued', 'rejected', 'unknown', 'cancelled'],
-  }).notNull(),
-  environment: text('environment', { enum: ['producao', 'producao_restrita'] }).notNull(),
-  issuedAt: integer('issued_at', { mode: 'timestamp_ms' }),
-  competence: text('competence').notNull(),
-  customerDocument: text('customer_document'),
-  customerName: text('customer_name'),
-  serviceCode: text('service_code').notNull(),
-  description: text('description').notNull(),
-  serviceCents: integer('service_cents').notNull(),
-  // Export invoices issued by the app: a resend of the same DPS needs the same amount.
-  foreignAmountCents: integer('foreign_amount_cents'),
-  issCents: integer('iss_cents'),
-  netCents: integer('net_cents').notNull(),
-  origin: text('origin', { enum: ['synced', 'app'] }).notNull(),
-  templateOf: text('template_of'),
-  xmlGzip: blob('xml_gzip', { mode: 'buffer' }),
-  sefinMessages: text('sefin_messages', { mode: 'json' }),
-  createdBy: text('created_by').references(() => users.id),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const invoices = sqliteTable(
+  'invoices',
+  {
+    id: id(),
+    emitterId: text('emitter_id')
+      .notNull()
+      .references(() => emitters.id),
+    customerId: text('customer_id').references(() => customers.id),
+    accessKey: text('access_key').unique(),
+    number: text('number'),
+    dpsId: text('dps_id'),
+    dpsSeries: text('dps_series').notNull(),
+    dpsNumber: integer('dps_number').notNull(),
+    status: text('status', {
+      enum: ['pending', 'issued', 'rejected', 'unknown', 'cancelled'],
+    }).notNull(),
+    environment: text('environment', { enum: ['producao', 'producao_restrita'] }).notNull(),
+    issuedAt: integer('issued_at', { mode: 'timestamp_ms' }),
+    competence: text('competence').notNull(),
+    customerDocument: text('customer_document'),
+    customerName: text('customer_name'),
+    serviceCode: text('service_code').notNull(),
+    description: text('description').notNull(),
+    serviceCents: integer('service_cents').notNull(),
+    // Export invoices issued by the app: a resend of the same DPS needs the same amount.
+    foreignAmountCents: integer('foreign_amount_cents'),
+    issCents: integer('iss_cents'),
+    netCents: integer('net_cents').notNull(),
+    origin: text('origin', { enum: ['synced', 'app'] }).notNull(),
+    templateOf: text('template_of'),
+    // Sent by the issue form; a repeat of the same key answers the first row.
+    idempotencyKey: text('idempotency_key'),
+    xmlGzip: blob('xml_gzip', { mode: 'buffer' }),
+    sefinMessages: text('sefin_messages', { mode: 'json' }),
+    createdBy: text('created_by').references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('invoices_emitter_idempotency_key').on(table.emitterId, table.idempotencyKey),
+  ],
+);
 
 export const invoiceEvents = sqliteTable(
   'invoice_events',

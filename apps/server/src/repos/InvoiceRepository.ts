@@ -16,7 +16,12 @@ const normalized = (text: string) => text.replace(/\r\n?/g, '\n').trim();
 
 // A resend of our own DPS reproduces these values; another system's invoice with the same number does not.
 export function isOwnInvoice(
-  row: { competence: string; serviceCents: number; description: string; customerDocument: string | null },
+  row: {
+    competence: string;
+    serviceCents: number;
+    description: string;
+    customerDocument: string | null;
+  },
   invoice: ProviderInvoice,
 ): boolean {
   return (
@@ -243,6 +248,38 @@ export class InvoiceRepository {
     return row?.xmlGzip ? gunzipSync(row.xmlGzip).toString('utf8') : null;
   }
 
+  findByIdempotencyKey(ctx: AccountContext, emitterId: string, key: string): string | null {
+    const row = this.db
+      .select({ id: invoices.id })
+      .from(invoices)
+      .innerJoin(emitters, eq(emitters.id, invoices.emitterId))
+      .where(
+        and(
+          eq(invoices.emitterId, emitterId),
+          eq(invoices.idempotencyKey, key),
+          eq(emitters.accountId, ctx.accountId),
+        ),
+      )
+      .get();
+    return row?.id ?? null;
+  }
+
+  issueView(ctx: AccountContext, invoiceId: string) {
+    return (
+      this.db
+        .select({
+          status: invoices.status,
+          number: invoices.number,
+          accessKey: invoices.accessKey,
+          sefinMessages: invoices.sefinMessages,
+        })
+        .from(invoices)
+        .innerJoin(emitters, eq(emitters.id, invoices.emitterId))
+        .where(and(eq(invoices.id, invoiceId), eq(emitters.accountId, ctx.accountId)))
+        .get() ?? null
+    );
+  }
+
   createPending(
     ctx: AccountContext,
     input: {
@@ -261,6 +298,7 @@ export class InvoiceRepository {
       environment: Environment;
       templateOf: string;
       createdBy: string;
+      idempotencyKey?: string;
     },
   ): string {
     this.requireEmitter(ctx, input.emitterId);

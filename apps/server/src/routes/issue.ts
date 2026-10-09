@@ -6,6 +6,7 @@ import { HttpError } from '../httpError';
 import type { IssueInput, IssueService } from '../issue/IssueService';
 
 const DATE = '^\\d{4}-\\d{2}-\\d{2}$';
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9-]{8,100}$/;
 
 const issueSchema = {
   body: {
@@ -85,8 +86,17 @@ export function issueRoutes(
     { schema: issueSchema },
     async (request, reply) => {
       const ctx = accountContext(request, request.params.accountId, { write: true });
-      const result = await deps.issue.issue(ctx, identityOf(request).email, request.body);
-      return reply.status(201).send(result);
+      const key = request.headers['idempotency-key'];
+      if (key !== undefined && (typeof key !== 'string' || !IDEMPOTENCY_KEY.test(key))) {
+        throw new HttpError(400, 'invalid_idempotency_key');
+      }
+      const { view, repeat } = await deps.issue.issue(
+        ctx,
+        identityOf(request).email,
+        request.body,
+        key,
+      );
+      return reply.status(repeat ? 200 : 201).send(view);
     },
   );
 
