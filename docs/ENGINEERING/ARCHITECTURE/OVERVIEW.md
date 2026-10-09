@@ -22,7 +22,7 @@ cloudflared ──► server (Fastify) ──► provider "nacional" ──► S
 | `packages/provider-nacional` | DPS and event XML, and the Sefin and ADN client. |
 | `packages/fake-nacional` | In-memory fake of the Sefin and the ADN for development and tests. Never in production. |
 | `services/signer-py` | Python `Signer`, kept as plan B. |
-| `apps/server` | API, persistence, vault, jobs, authorization (Stage 1a). |
+| `apps/server` | API, persistence, vault, authorization (Stage 1a-2); sync jobs (Stage 1a-3). |
 | `apps/web` | UI (Stage 1a). |
 
 ## Ports
@@ -31,7 +31,7 @@ cloudflared ──► server (Fastify) ──► provider "nacional" ──► S
 
 **`InvoiceProvider`** is what an invoice system implements. The read side (Stage 1a) checks the connection, fetches documents since a cursor (`fetchSince`), and gets one invoice by access key. Issue and cancel join in Stage 1b. `NacionalProvider` is the national implementation.
 
-**`CertificateStore`** (Stage 1a) stores and loads tenant certificates. Each certificate is encrypted with its own data key, and `NFSE_MASTER_KEY` wraps that key.
+**`CertificateStore`** stores and loads tenant certificates. Each certificate is encrypted with its own data key, and `NFSE_MASTER_KEY` wraps that key. See [Certificate Vault](CERTIFICATE_VAULT.md); accounts and roles are in [Tenancy](TENANCY.md).
 
 ## Rules that hold across packages
 

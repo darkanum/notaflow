@@ -22,6 +22,7 @@ NotaFlow is a multi-tenant web app that issues, copies, and cancels Brazilian se
 | Node signer | [packages/signer-node/AGENTS.md](packages/signer-node/AGENTS.md) |
 | National provider | [packages/provider-nacional/AGENTS.md](packages/provider-nacional/AGENTS.md) |
 | Fake Sefin and ADN | [packages/fake-nacional/AGENTS.md](packages/fake-nacional/AGENTS.md) |
+| Server | [apps/server/AGENTS.md](apps/server/AGENTS.md) |
 | Python signer | [services/signer-py/AGENTS.md](services/signer-py/AGENTS.md) |
 
 ## Docs
@@ -36,5 +37,7 @@ NotaFlow is a multi-tenant web app that issues, copies, and cancels Brazilian se
 | `pnpm typecheck` | `tsc` in every package |
 | `pnpm test` | Vitest on the whole repo |
 | `pytest services/signer-py` | Python signer tests |
+| `pnpm dev:server` | Local server; needs `apps/server/.env.local` and `pnpm fake:nacional` |
+| `pnpm seed:admin <email> <name>` | Create or promote a platform admin |
 | `pnpm fake:nacional` | Local fake of the Sefin and the ADN on port 4010 |
 | `pnpm spike:sefin` | Stage 0 spike against produção restrita (needs `.env.local`) |
