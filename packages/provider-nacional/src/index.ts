@@ -18,6 +18,8 @@ export { ENDPOINTS } from './http/endpoints';
 export { gunzipBase64, gzipBase64 } from './http/gzipBase64';
 export { isDuplicateDps, NacionalClient, NacionalHttpError } from './http/NacionalClient';
 export { NacionalProvider } from './NacionalProvider';
+export { readTemplate, TemplateUnsupportedError } from './template/readTemplate';
+export type { DpsTemplate } from './template/readTemplate';
 export type {
   DfeBatch,
   DfeDocument,
