@@ -85,6 +85,22 @@ describe('every /api route', () => {
     }
   });
 
+  test('a percent-encoded /api path still goes through the auth hook and the mutation guard', async () => {
+    const headers = { ...(await t.as('a@example.com')), 'content-type': 'text/plain' };
+    const response = await t.app.inject({
+      method: 'POST',
+      url: `/%61pi/accounts/${params.accountId ?? ''}/members`,
+      headers,
+      payload: 'x',
+    });
+    expect(response.statusCode).toBe(415);
+  });
+
+  test('a query string on the health route needs no authentication', async () => {
+    const response = await t.app.inject({ method: 'GET', url: '/api/health?probe=1' });
+    expect(response.statusCode).toBe(200);
+  });
+
   test('a platform admin without a membership gets 404 on account routes', async () => {
     const response = await t.app.inject({
       method: 'GET',

@@ -13,7 +13,9 @@ export function registerAuth(
 ): void {
   app.decorateRequest('identity', null);
   app.addHook('onRequest', async (request) => {
-    if (!request.url.startsWith('/api/') || request.url === '/api/health') return;
+    // The matched route, not the raw URL: the router decodes %61pi to api before matching.
+    const route = request.routeOptions.url;
+    if (route === '/api/health' || (route !== undefined && !route.startsWith('/api/'))) return;
     const email = await emailOf(request, deps.config, deps.verifyAccessToken);
     const identity = deps.identities.findByEmail(email);
     if (!identity) throw new HttpError(403, 'access_not_granted');
