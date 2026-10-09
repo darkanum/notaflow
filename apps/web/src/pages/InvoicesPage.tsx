@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react';
-import { api, type Emitter, type InvoicePage } from '../api';
+import { api, type Emitter, type InvoicePage, type InvoiceSummary } from '../api';
 import { EnvironmentBadge } from '../components/EnvironmentBadge';
 import { Layout, errorText } from '../components/Layout';
 import { useAsync } from '../components/useAsync';
@@ -31,7 +31,7 @@ export const STATUS_TEXT: Record<string, string> = {
   cancelled: 'Cancelada',
 };
 
-export const STATUS_VARIANT: Record<string, BadgeVariant> = {
+export const STATUS_VARIANT: Record<InvoiceSummary['status'], BadgeVariant> = {
   pending: 'info',
   issued: 'success',
   rejected: 'danger',
