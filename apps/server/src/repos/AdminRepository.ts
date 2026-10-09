@@ -1,0 +1,58 @@
+import { randomUUID } from 'node:crypto';
+import type { AccountRole, AdminContext } from '@notaflow/core';
+import { count, eq } from 'drizzle-orm';
+import type { Database } from '../db/openDatabase';
+import { accounts, memberships, users } from '../db/schema';
+
+// Platform scope: every method needs an AdminContext, which only the admin guard builds.
+export class AdminRepository {
+  constructor(private readonly db: Database) {}
+
+  listAccounts(_ctx: AdminContext) {
+    return this.db
+      .select({
+        id: accounts.id,
+        name: accounts.name,
+        status: accounts.status,
+        plan: accounts.plan,
+        members: count(memberships.id),
+      })
+      .from(accounts)
+      .leftJoin(memberships, eq(memberships.accountId, accounts.id))
+      .groupBy(accounts.id)
+      .orderBy(accounts.name)
+      .all();
+  }
+
+  createAccount(_ctx: AdminContext, name: string): string {
+    const id = randomUUID();
+    this.db.insert(accounts).values({ id, name }).run();
+    return id;
+  }
+
+  setAccountStatus(_ctx: AdminContext, accountId: string, status: 'active' | 'suspended'): boolean {
+    return (
+      this.db.update(accounts).set({ status }).where(eq(accounts.id, accountId)).run().changes > 0
+    );
+  }
+
+  createUser(_ctx: AdminContext, email: string, name: string): string | null {
+    const normalized = email.toLowerCase();
+    if (this.db.select().from(users).where(eq(users.email, normalized)).get()) return null;
+    const id = randomUUID();
+    this.db.insert(users).values({ id, email: normalized, name }).run();
+    return id;
+  }
+
+  setMembership(_ctx: AdminContext, accountId: string, userId: string, role: AccountRole): boolean {
+    const account = this.db.select().from(accounts).where(eq(accounts.id, accountId)).get();
+    const user = this.db.select().from(users).where(eq(users.id, userId)).get();
+    if (!account || !user) return false;
+    this.db
+      .insert(memberships)
+      .values({ id: randomUUID(), accountId, userId, role })
+      .onConflictDoUpdate({ target: [memberships.userId, memberships.accountId], set: { role } })
+      .run();
+    return true;
+  }
+}

@@ -5,8 +5,8 @@ The domain types and the ports (interfaces) that every other package implements 
 ## Quick Reference
 
 - Entry point: `src/index.ts`
-- Ports: `Signer` (`src/ports/Signer.ts`), `InvoiceProvider` (`src/ports/InvoiceProvider.ts`, read side). `CertificateStore` arrives in Stage 1a-2.
-- Domain: `ProviderInvoice`, `ProviderEvent`, `InvoiceParty` (`src/domain/ProviderInvoice.ts`).
+- Ports: `Signer` (`src/ports/Signer.ts`), `InvoiceProvider` (`src/ports/InvoiceProvider.ts`, read side). `CertificateStore` (`src/ports/CertificateStore.ts`).
+- Domain: `ProviderInvoice`, `ProviderEvent`, `InvoiceParty` (`src/domain/ProviderInvoice.ts`). Tenancy: `AccountContext`, `AdminContext` (`src/domain/Tenancy.ts`).
 - Depends on: nothing.
 
 ## Documentation Index

@@ -1,0 +1,62 @@
+import { randomUUID } from 'node:crypto';
+import type { AccountContext } from '@notaflow/core';
+import { and, eq } from 'drizzle-orm';
+import type { Database } from '../db/openDatabase';
+import { certificates, emitters } from '../db/schema';
+import type { SealedCertificate } from '../vault/envelope';
+
+export type CertificateRow = typeof certificates.$inferSelect;
+
+export interface CertificateMeta {
+  cnpj: string;
+  subject: string;
+  validFrom: Date;
+  validTo: Date;
+  fingerprintSha256: string;
+  uploadedBy: string;
+}
+
+export class CertificateRepository {
+  constructor(private readonly db: Database) {}
+
+  addActive(
+    ctx: AccountContext,
+    emitterId: string,
+    sealed: SealedCertificate,
+    meta: CertificateMeta,
+  ): string {
+    return this.db.transaction((tx) => {
+      const emitter = tx
+        .select({ id: emitters.id })
+        .from(emitters)
+        .where(and(eq(emitters.id, emitterId), eq(emitters.accountId, ctx.accountId)))
+        .get();
+      if (!emitter) throw new Error('Emitter not found in this account.');
+      tx.update(certificates)
+        .set({ active: false })
+        .where(eq(certificates.emitterId, emitterId))
+        .run();
+      const id = randomUUID();
+      tx.insert(certificates)
+        .values({ id, emitterId, ...sealed, ...meta, active: true })
+        .run();
+      return id;
+    });
+  }
+
+  activeFor(ctx: AccountContext, emitterId: string): CertificateRow | null {
+    const row = this.db
+      .select({ certificate: certificates })
+      .from(certificates)
+      .innerJoin(emitters, eq(emitters.id, certificates.emitterId))
+      .where(
+        and(
+          eq(certificates.emitterId, emitterId),
+          eq(certificates.active, true),
+          eq(emitters.accountId, ctx.accountId),
+        ),
+      )
+      .get();
+    return row?.certificate ?? null;
+  }
+}
