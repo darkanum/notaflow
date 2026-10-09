@@ -34,6 +34,7 @@ export interface AppDeps {
   logStream?: { write(line: string): void };
   providerFactory?: ProviderFactory;
   syncService?: SyncService;
+  syncRetryDelaysMs?: number[];
   onEmitterCreated?: (ctx: AccountContext, emitterId: string) => void;
   webRoot?: string;
 }
@@ -66,6 +67,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       db,
       certificates: new VaultCertificateStore(new CertificateRepository(db), config.masterKey),
       providerFactory,
+      ...(deps.syncRetryDelaysMs ? { retryDelaysMs: deps.syncRetryDelaysMs } : {}),
     });
   app.decorate('syncService', syncService);
   const onEmitterCreated =

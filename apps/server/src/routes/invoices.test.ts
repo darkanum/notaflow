@@ -26,18 +26,20 @@ async function onboarded(email = 'owner@example.com') {
       dpsSeries: '900',
     },
   });
+  expect(response.statusCode).toBe(201);
   return { a, emitterId: response.json<{ id: string }>().id };
 }
 
 async function synced() {
   const tenant = await onboarded();
   const keys = await issueOnFake(t.fake, 3);
-  await t.app.inject({
+  const sync = await t.app.inject({
     method: 'POST',
     url: `/api/accounts/${tenant.a.accountId}/emitters/${tenant.emitterId}/sync`,
     headers: await t.as('owner@example.com'),
     payload: {},
   });
+  expect(sync.json()).toMatchObject({ invoices: 3, error: null });
   return { ...tenant, keys };
 }
 
@@ -144,7 +146,9 @@ test('another account sees none of the invoices', async () => {
     url: `/api/accounts/${a.accountId}/invoices`,
     headers: await t.as('owner@example.com'),
   });
+  expect(own.json()).toMatchObject({ total: 3 });
   const id = own.json<{ items: { id: string }[] }>().items[0]?.id ?? '';
+  expect(id).not.toBe('');
   const detail = await t.app.inject({
     method: 'GET',
     url: `/api/accounts/${b.accountId}/invoices/${id}`,

@@ -47,6 +47,8 @@ export async function createTestApp(
     ...(options.logStream ? { logStream: options.logStream } : {}),
     // Tests sync explicitly; a background sync could outlive the in-memory database.
     onEmitterCreated: options.onEmitterCreated ?? (() => {}),
+    // Production waits 1, 5, and 15 seconds; a test would hit its own timeout.
+    syncRetryDelaysMs: [0, 0],
   });
   await app.ready();
 

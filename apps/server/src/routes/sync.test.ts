@@ -99,3 +99,18 @@ async function createTestAppWith(
 ) {
   return createTestApp({ onEmitterCreated });
 }
+
+test('the test app retries a transient ADN error without the production delays', async () => {
+  const { a, emitterId } = await onboarded();
+  await issueOnFake(t.fake, 1);
+  t.fake.next('dfe', { kind: 'reply', status: 503, body: 'busy' });
+  const started = Date.now();
+  const run = await t.app.inject({
+    method: 'POST',
+    url: `/api/accounts/${a.accountId}/emitters/${emitterId}/sync`,
+    headers: await t.as('owner@example.com'),
+    payload: {},
+  });
+  expect(run.json()).toMatchObject({ invoices: 1, error: null });
+  expect(Date.now() - started).toBeLessThan(800);
+});
