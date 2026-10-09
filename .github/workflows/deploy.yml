@@ -1,0 +1,98 @@
+name: Deploy
+
+# After CI passes on production: build the image, push it to GHCR, and run it on the Vapulab VPS.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [production]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.sha.outputs.sha }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://notaflow.vapulab.com
+    permissions:
+      contents: read
+      packages: read
+    env:
+      TAG: ${{ needs.build.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.build.outputs.sha }}
+
+      - name: Configure SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.VM_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<EOF
+          Host vm
+            HostName ${{ secrets.VM_HOST }}
+            User root
+            IdentityFile ~/.ssh/id_ed25519
+            IdentitiesOnly yes
+          EOF
+
+      - name: Copy the compose file
+        run: scp deploy/compose.yaml vm:/opt/notaflow/compose.yaml
+
+      # The job token logs the VPS into GHCR only for the pull. IMAGE goes into .env only after a
+      # good pull, so a manual docker compose on the VPS always uses the running version.
+      - name: Start the new version
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | ssh vm "docker login ghcr.io -u ${{ github.actor }} --password-stdin"
+          ssh vm "cd /opt/notaflow && IMAGE=${IMAGE}:${TAG} docker compose pull app \
+            ; status=\$?; docker logout ghcr.io; [ \$status -eq 0 ] || exit \$status; \
+            sed -i '/^IMAGE=/d' .env && echo IMAGE=${IMAGE}:${TAG} >> .env \
+            && docker compose up -d --remove-orphans && docker image prune -f"
+
+      - name: Health check
+        run: |
+          ssh vm 'for i in $(seq 1 45); do
+            docker run --rm --network northub_default curlimages/curl:8.10.1 -fsS http://notaflow:3000/api/health && exit 0
+            sleep 2
+          done
+          cd /opt/notaflow && docker compose logs --tail 80 app; exit 1'
