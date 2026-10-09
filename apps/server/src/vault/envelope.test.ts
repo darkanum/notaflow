@@ -18,7 +18,7 @@ test('open throws VaultError with the wrong key', () => {
 
 test('open throws VaultError on a tampered ciphertext', () => {
   const sealed = seal(Buffer.from('certificate bytes'), master);
-  sealed[sealed.length - 1] ^= 0x01;
+  sealed.writeUInt8(sealed.readUInt8(sealed.length - 1) ^ 0x01, sealed.length - 1);
   expect(() => open(sealed, master)).toThrow(VaultError);
 });
 
