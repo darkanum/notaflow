@@ -351,7 +351,7 @@ Surprises, all handled in `NacionalClient` or recorded here:
 - Sefin error objects use `Codigo` and `Descricao`, capitalized. Some error bodies arrive in Latin-1 (seen with E0014). The client handles both.
 - The Sefin issued a DPS with a zero service amount. The app must refuse a zero amount itself.
 - A cancellation request for an invoice that is already cancelled got a rejection whose body is not in the `erro` shape the client reads. Capture the raw body before Stage 1a maps event errors.
-- The ADN returned no documents for the emitter right after the issues. Find out in Stage 1a whether the ADN distribution has a delay or whether NSU 0 needs another query.
+- The ADN returned no documents for the emitter right after the issues. Stage 1a answered it: the restrita ADN delivers them later (see Stage 1a acceptance).
 
 ### Production ADN read (Stage 1a-1, 2026-10-09)
 
@@ -361,6 +361,14 @@ A read-only run of `pnpm spike:adn-read` against the production ADN, with the em
 - `/DFe/{NSU}` is exclusive of `NSU`: from NSU 0 the first document had NSU 1, and from the last NSU (6) the ADN returned no document.
 - The production ADN returns the emitter's invoices, unlike produção restrita in Stage 0. The empty feed there remains open.
 - `getInvoice` by access key returned the invoice.
+
+### Stage 1a acceptance (2026-10-09)
+
+Stage 1a is accepted. On the owner's machine, with the real certificate:
+
+- The account, the owner, and the emitter were created through the UI, and the connection test passed in produção restrita.
+- The first sync after onboarding read produção restrita and stored the 3 invoices of the Stage 0 spike, all cancelled. So the restrita ADN does deliver the emitter's documents; in Stage 0 it had not processed them yet when the spike read it minutes after the issues.
+- After the switch to production (audited), "Sincronizar agora" listed the emitter's 3 production invoices, all issued. Invoices where the emitter is the customer were not listed. Nothing was issued or cancelled.
 
 ## Open Questions
 
