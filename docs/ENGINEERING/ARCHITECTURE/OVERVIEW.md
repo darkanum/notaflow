@@ -23,7 +23,7 @@ cloudflared ──► server (Fastify) ──► provider "nacional" ──► S
 | `packages/fake-nacional` | In-memory fake of the Sefin and the ADN for development and tests. Never in production. |
 | `services/signer-py` | Python `Signer`, kept as plan B. |
 | `apps/server` | API, persistence, vault, authorization (Stage 1a-2); sync jobs (Stage 1a-3). |
-| `apps/web` | UI (Stage 1a). |
+| `apps/web` | React UI, built with Vite and served by the server (Stage 1a-3). |
 
 ## Ports
 
@@ -38,3 +38,4 @@ cloudflared ──► server (Fastify) ──► provider "nacional" ──► S
 - `core` does not import XML, HTTP, or database code.
 - Every XML builder validates against the official XSD in a test.
 - mTLS uses the PEM key and certificate from `loadCertificate`, never the raw `.pfx`.
+- The ADN sync (cursor per environment, retries, document rules) is in [ADN Sync](SYNC.md).
