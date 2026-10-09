@@ -7,7 +7,7 @@ import { Agent, MockAgent, request } from 'undici';
 import { beforeEach, describe, expect, test } from 'vitest';
 import { createMtlsDispatcher } from './createMtlsDispatcher';
 import { gunzipBase64, gzipBase64 } from './gzipBase64';
-import { NacionalClient } from './NacionalClient';
+import { isDuplicateDps, NacionalClient } from './NacionalClient';
 
 const SEFIN = 'https://sefin.producaorestrita.nfse.gov.br';
 const ADN = 'https://adn.producaorestrita.nfse.gov.br';
@@ -326,6 +326,23 @@ describe('registerEvent', () => {
       error: { codigo: 'E1234', descricao: 'Prazo expirado' },
     });
   });
+
+  test('400 with an erros array returns the first error', async () => {
+    agent
+      .get(SEFIN)
+      .intercept({ path: `/SefinNacional/nfse/${KEY}/eventos`, method: 'POST' })
+      .reply(400, { erros: [{ Codigo: 'E0840', Descricao: 'NFS-e já cancelada' }] });
+    expect(await client.registerEvent(KEY, '<x/>')).toEqual({
+      kind: 'rejected',
+      error: { codigo: 'E0840', descricao: 'NFS-e já cancelada' },
+    });
+  });
+});
+
+test('isDuplicateDps is true only for E0014', () => {
+  expect(isDuplicateDps([{ codigo: 'E0014', descricao: 'x' }])).toBe(true);
+  expect(isDuplicateDps([{ codigo: 'E0001', descricao: 'x' }])).toBe(false);
+  expect(isDuplicateDps([])).toBe(false);
 });
 
 describe('fetchDfe', () => {

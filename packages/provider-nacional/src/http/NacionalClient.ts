@@ -81,6 +81,11 @@ function sefinError(raw: unknown): SefinError {
   };
 }
 
+// E0014: an NFS-e already exists for this DPS (RFC Open Questions).
+export function isDuplicateDps(errors: SefinError[]): boolean {
+  return errors.some((error) => error.codigo === 'E0014');
+}
+
 // Some Sefin error bodies arrive in Latin-1 (seen with E0014), so invalid UTF-8 falls back to it.
 function decodeBody(bytes: Buffer): string {
   try {
@@ -185,7 +190,10 @@ export class NacionalClient {
     const data = (body ?? {}) as Json;
     // The event exists once the Sefin answers 201, even when its XML is unreadable.
     if (status === 201) return { kind: 'registered', eventXml: tryGunzip(data.eventoXmlGZipB64) };
-    if (status === 400 || status === 401) return { kind: 'rejected', error: sefinError(data.erro) };
+    if (status === 400 || status === 401) {
+      const raw = Array.isArray(data.erros) ? data.erros[0] : data.erro;
+      return { kind: 'rejected', error: sefinError(raw) };
+    }
     throw httpError(status, body);
   }
 
