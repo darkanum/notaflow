@@ -11,7 +11,7 @@
     "typecheck": "pnpm -r --parallel typecheck && pnpm typecheck:root",
     "test": "vitest run",
     "format": "prettier --write .",
-    "prepare": "git config core.hooksPath .githooks",
+    "prepare": "git config core.hooksPath .githooks || true",
     "typecheck:root": "tsc -p tsconfig.json",
     "spike:sefin": "tsx --env-file=.env.local spikes/2026-10-sefin/run.ts",
     "spike:sefin:cancel": "tsx --env-file=.env.local spikes/2026-10-sefin/cancel.ts",
