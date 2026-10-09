@@ -5,7 +5,7 @@ import type { Database } from '../db/openDatabase';
 import { customers, emitters } from '../db/schema';
 
 export type CustomerRow = typeof customers.$inferSelect;
-type ManualField = 'name' | 'email' | 'phone' | 'municipalRegistration';
+export type ManualField = 'name' | 'email' | 'phone' | 'municipalRegistration' | 'address';
 
 export class CustomerRepository {
   constructor(private readonly db: Database) {}
