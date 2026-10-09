@@ -1,4 +1,6 @@
 import { AdminPage } from './pages/AdminPage';
+import { CustomerPage } from './pages/CustomerPage';
+import { CustomersPage } from './pages/CustomersPage';
 import { EmittersPage } from './pages/EmittersPage';
 import { HomePage } from './pages/HomePage';
 import { InvoiceDetailPage } from './pages/InvoiceDetailPage';
@@ -18,6 +20,10 @@ export function App() {
       return <InvoiceDetailPage accountId={route.accountId} invoiceId={route.invoiceId} />;
     case 'issue':
       return <IssuePage accountId={route.accountId} invoiceId={route.invoiceId} />;
+    case 'customers':
+      return <CustomersPage accountId={route.accountId} />;
+    case 'customer':
+      return <CustomerPage accountId={route.accountId} customerId={route.customerId} />;
     case 'members':
       return <MembersPage accountId={route.accountId} />;
     case 'admin':
