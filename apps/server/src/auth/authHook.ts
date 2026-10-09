@@ -3,6 +3,7 @@ import type { Config } from '../config';
 import { HttpError } from '../httpError';
 import type { IdentityRepository } from '../repos/IdentityRepository';
 import type { VerifyAccessToken } from './accessVerifier';
+import { accountContext, adminContext } from './guards';
 
 const MUTATIONS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -23,6 +24,15 @@ export function registerAuth(
       }
     }
     request.identity = identity;
+  });
+  // Membership and admin checks run before body validation, so a stranger gets 404, not 400.
+  app.addHook('preValidation', async (request) => {
+    const url = request.routeOptions.url ?? '';
+    const params = request.params as Record<string, string | undefined>;
+    if (url.startsWith('/api/admin/')) adminContext(request);
+    if (url.startsWith('/api/accounts/:accountId') && params.accountId) {
+      accountContext(request, params.accountId);
+    }
   });
 }
 
