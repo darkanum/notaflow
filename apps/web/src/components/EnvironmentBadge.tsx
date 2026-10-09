@@ -1,9 +1,17 @@
 import type { Environment } from '../api';
+import { Badge } from '../ui';
+
+// Larger than a Malphas md badge on purpose: the environment must never be missed.
+const LOUD = 'px-3 py-1.5 text-sm';
 
 export function EnvironmentBadge({ environment }: { environment: Environment }) {
   return environment === 'producao' ? (
-    <span className="badge badge-production">PRODUÇÃO</span>
+    <Badge variant="danger" className={LOUD}>
+      PRODUÇÃO
+    </Badge>
   ) : (
-    <span className="badge badge-test">PRODUÇÃO RESTRITA (teste)</span>
+    <Badge variant="warning" className={LOUD}>
+      PRODUÇÃO RESTRITA (teste)
+    </Badge>
   );
 }
