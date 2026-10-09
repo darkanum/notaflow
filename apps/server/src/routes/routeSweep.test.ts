@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { seedTenant, seedUser } from '../../test/fixtures';
 import { createTestApp, type TestApp } from '../../test/testApp';
+import { providerInvoice } from '../../test/providerData';
 import { EmitterRepository } from '../repos/EmitterRepository';
+import { InvoiceRepository } from '../repos/InvoiceRepository';
 
 let t: TestApp;
 let params: Record<string, string>;
@@ -19,7 +21,13 @@ beforeAll(async () => {
     specialRegime: '0',
     dpsSeries: '900',
   });
-  params = { accountId: a.accountId, emitterId: emitter.id, userId: a.userId };
+  const invoice = new InvoiceRepository(t.db).upsertSynced(a, emitter.id, providerInvoice(), null);
+  params = {
+    accountId: a.accountId,
+    emitterId: emitter.id,
+    userId: a.userId,
+    invoiceId: invoice.id,
+  };
 });
 afterAll(() => t.close());
 

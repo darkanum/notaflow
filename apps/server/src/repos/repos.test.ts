@@ -154,5 +154,6 @@ describe('AuditLog', () => {
       ['account.create', 'ok'],
       ['user.create', 'refused'],
     ]);
+    expect(log.latest(1).map((e) => e.action)).toEqual(['user.create']);
   });
 });

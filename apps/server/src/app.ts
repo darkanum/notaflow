@@ -9,7 +9,10 @@ import { nacionalProviderFactory, type ProviderFactory } from './providers/provi
 import { CertificateRepository } from './repos/CertificateRepository';
 import { IdentityRepository } from './repos/IdentityRepository';
 import { adminRoutes } from './routes/admin';
+import { auditRoutes } from './routes/audit';
+import { customerRoutes } from './routes/customers';
 import { emitterRoutes } from './routes/emitters';
+import { invoiceRoutes } from './routes/invoices';
 import { meRoutes } from './routes/me';
 import { memberRoutes } from './routes/members';
 import { syncRoutes } from './routes/sync';
@@ -78,5 +81,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   memberRoutes(app, db);
   emitterRoutes(app, { db, masterKey: config.masterKey, providerFactory, onEmitterCreated });
   syncRoutes(app, { db, sync: syncService });
+  invoiceRoutes(app, { db, masterKey: config.masterKey, providerFactory });
+  customerRoutes(app, db);
+  auditRoutes(app, db);
   return app;
 }

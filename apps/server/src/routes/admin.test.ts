@@ -118,3 +118,26 @@ test('an invalid body is 400', async () => {
   });
   expect(response.statusCode).toBe(400);
 });
+
+test('the audit log is readable by a platform admin, newest first', async () => {
+  const headers = await t.as('admin@example.com');
+  await t.app.inject({
+    method: 'POST',
+    url: '/api/admin/accounts',
+    headers,
+    payload: { name: 'One' },
+  });
+  await t.app.inject({
+    method: 'POST',
+    url: '/api/admin/accounts',
+    headers,
+    payload: { name: 'Two' },
+  });
+  const response = await t.app.inject({ method: 'GET', url: '/api/admin/audit?limit=1', headers });
+  expect(response.statusCode).toBe(200);
+  const entries = response.json<{ action: string; entity: string }[]>();
+  expect(entries).toHaveLength(1);
+  const accounts = await t.app.inject({ method: 'GET', url: '/api/admin/accounts', headers });
+  const two = accounts.json<{ id: string; name: string }[]>().find((x) => x.name === 'Two');
+  expect(entries[0]).toMatchObject({ action: 'account.create', entity: two?.id });
+});
