@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { AccountContext, Environment } from '@notaflow/core';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import type { Database } from '../db/openDatabase';
 import { emitters } from '../db/schema';
 
@@ -54,6 +54,18 @@ export class EmitterRepository {
       .values({ ...input, id: randomUUID(), accountId: ctx.accountId })
       .returning()
       .get();
+  }
+
+  reserveDpsNumber(ctx: AccountContext, emitterId: string): number {
+    // One UPDATE ... RETURNING: SQLite runs it atomically, so two requests never get one number.
+    const row = this.db
+      .update(emitters)
+      .set({ nextDpsNumber: sql`${emitters.nextDpsNumber} + 1` })
+      .where(and(eq(emitters.id, emitterId), eq(emitters.accountId, ctx.accountId)))
+      .returning({ next: emitters.nextDpsNumber })
+      .get();
+    if (!row) throw new Error('Emitter not found in this account.');
+    return row.next - 1;
   }
 
   setEnvironment(ctx: AccountContext, emitterId: string, environment: Environment): boolean {
