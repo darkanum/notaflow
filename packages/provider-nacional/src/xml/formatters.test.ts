@@ -1,5 +1,10 @@
 import { expect, test } from 'vitest';
-import { centsToDecimal, formatBrasiliaDate, formatBrasiliaDateTime } from './formatters';
+import {
+  centsToDecimal,
+  decimalToCents,
+  formatBrasiliaDate,
+  formatBrasiliaDateTime,
+} from './formatters';
 
 test.each([
   [0, '0.00'],
@@ -24,4 +29,20 @@ test('formatBrasiliaDateTime writes UTC-3 without milliseconds', () => {
 test('formatBrasiliaDate keeps the Brasília day after 21:00 local time', () => {
   expect(formatBrasiliaDate(new Date('2026-10-09T01:30:00Z'))).toBe('2026-10-08');
   expect(formatBrasiliaDate(new Date('2026-10-09T03:00:00Z'))).toBe('2026-10-09');
+});
+
+test.each([
+  ['0.00', 0],
+  ['10', 1000],
+  ['10.5', 1050],
+  ['18135.60', 1813560],
+  ['1234567.89', 123456789],
+])('decimalToCents(%s) = %i', (value, cents) => {
+  expect(decimalToCents(value)).toBe(cents);
+});
+
+test('decimalToCents rejects a value that is not a non-negative decimal with up to 2 places', () => {
+  for (const value of ['', '-1.00', '1.234', 'abc', '1,50']) {
+    expect(() => decimalToCents(value)).toThrow(RangeError);
+  }
 });

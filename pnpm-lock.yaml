@@ -46,6 +46,9 @@ importers:
       '@notaflow/core':
         specifier: workspace:*
         version: link:../core
+      '@xmldom/xmldom':
+        specifier: ^0.9.12
+        version: 0.9.12
       undici:
         specifier: ^7.2.0
         version: 7.30.0
