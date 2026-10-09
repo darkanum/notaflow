@@ -5,6 +5,23 @@ import { Layout, errorText } from '../components/Layout';
 import { useAsync } from '../components/useAsync';
 import { formatCents, formatCompetence } from '../format';
 import { routeHref } from '../router';
+import {
+  Alert,
+  Badge,
+  type BadgeVariant,
+  Button,
+  CARD_CLASSES,
+  Card,
+  Field,
+  Input,
+  Link,
+  Select,
+  Table,
+  TBody,
+  TD,
+  TH,
+  THead,
+} from '../ui';
 
 export const STATUS_TEXT: Record<string, string> = {
   pending: 'Pendente',
@@ -12,6 +29,14 @@ export const STATUS_TEXT: Record<string, string> = {
   rejected: 'Rejeitada',
   unknown: 'Incerta',
   cancelled: 'Cancelada',
+};
+
+export const STATUS_VARIANT: Record<string, BadgeVariant> = {
+  pending: 'info',
+  issued: 'success',
+  rejected: 'danger',
+  unknown: 'warning',
+  cancelled: 'neutral',
 };
 
 const PAGE = 50;
@@ -63,17 +88,23 @@ export function InvoicesPage({ accountId }: { accountId: string }) {
   };
 
   return (
-    <Layout title="Notas">
-      <form onSubmit={lookup} className="card">
-        <label>
-          Buscar por chave de acesso
-          <input value={accessKey} onChange={(e) => setAccessKey(e.target.value)} />
-        </label>
-        <button type="submit">Buscar</button>
-        {lookupError && <p className="error">{lookupError}</p>}
+    <Layout title="Notas" accountId={accountId}>
+      <form
+        onSubmit={lookup}
+        className={`${CARD_CLASSES} flex flex-col gap-3 sm:flex-row sm:items-end`}
+      >
+        <div className="flex-1">
+          <Field label="Buscar por chave de acesso">
+            <Input value={accessKey} onChange={(e) => setAccessKey(e.target.value)} />
+          </Field>
+        </div>
+        <Button type="submit" variant="secondary">
+          Buscar
+        </Button>
       </form>
-      <div className="card">
-        <select
+      {lookupError && <Alert variant="error">{lookupError}</Alert>}
+      <Card className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <Select
           aria-label="Emitente"
           value={filters.emitterId}
           onChange={(e) => set('emitterId')(e.target.value)}
@@ -84,8 +115,8 @@ export function InvoicesPage({ accountId }: { accountId: string }) {
               {emitter.companyName}
             </option>
           ))}
-        </select>
-        <select
+        </Select>
+        <Select
           aria-label="Situação"
           value={filters.status}
           onChange={(e) => set('status')(e.target.value)}
@@ -96,70 +127,80 @@ export function InvoicesPage({ accountId }: { accountId: string }) {
               {text}
             </option>
           ))}
-        </select>
-        <input
+        </Select>
+        <Input
           aria-label="Competência de"
           type="date"
           value={filters.competenceFrom}
           onChange={(e) => set('competenceFrom')(e.target.value)}
         />
-        <input
+        <Input
           aria-label="Competência até"
           type="date"
           value={filters.competenceTo}
           onChange={(e) => set('competenceTo')(e.target.value)}
         />
-        <input
+        <Input
           aria-label="Pesquisar"
           placeholder="Número ou tomador"
           value={filters.q}
           onChange={(e) => set('q')(e.target.value)}
         />
-      </div>
-      {page.error && <p className="error">{errorText(page.error)}</p>}
+      </Card>
+      {page.error && <Alert variant="error">{errorText(page.error)}</Alert>}
       {page.data && (
         <>
-          <table>
-            <thead>
+          <Table>
+            <THead>
               <tr>
-                <th>Número</th>
-                <th>Competência</th>
-                <th>Tomador</th>
-                <th>Valor</th>
-                <th>Situação</th>
-                <th>Ambiente</th>
+                <TH>Número</TH>
+                <TH>Competência</TH>
+                <TH>Tomador</TH>
+                <TH>Valor</TH>
+                <TH>Situação</TH>
+                <TH>Ambiente</TH>
               </tr>
-            </thead>
-            <tbody>
+            </THead>
+            <TBody>
               {page.data.items.map((invoice) => (
                 <tr key={invoice.id}>
-                  <td>
-                    <a href={routeHref({ name: 'invoice', accountId, invoiceId: invoice.id })}>
+                  <TD>
+                    <Link href={routeHref({ name: 'invoice', accountId, invoiceId: invoice.id })}>
                       {invoice.number ?? '-'}
-                    </a>
-                  </td>
-                  <td>{formatCompetence(invoice.competence)}</td>
-                  <td>{invoice.customerName}</td>
-                  <td>{formatCents(invoice.serviceCents)}</td>
-                  <td className={`status-${invoice.status}`}>{STATUS_TEXT[invoice.status]}</td>
-                  <td>
+                    </Link>
+                  </TD>
+                  <TD>{formatCompetence(invoice.competence)}</TD>
+                  <TD>{invoice.customerName}</TD>
+                  <TD className="whitespace-nowrap">{formatCents(invoice.serviceCents)}</TD>
+                  <TD>
+                    <Badge variant={STATUS_VARIANT[invoice.status]}>
+                      {STATUS_TEXT[invoice.status]}
+                    </Badge>
+                  </TD>
+                  <TD>
                     {invoice.environment === 'producao' ? (
                       'Produção'
                     ) : (
                       <EnvironmentBadge environment={invoice.environment} />
                     )}
-                  </td>
+                  </TD>
                 </tr>
               ))}
-            </tbody>
-          </table>
-          <p>
-            {page.data.total} notas.{' '}
-            {offset > 0 && <button onClick={() => setOffset(offset - PAGE)}>Anteriores</button>}
-            {offset + PAGE < page.data.total && (
-              <button onClick={() => setOffset(offset + PAGE)}>Próximas</button>
+            </TBody>
+          </Table>
+          <div className="flex flex-wrap items-center gap-3 text-sm text-muted">
+            <span>{page.data.total} notas.</span>
+            {offset > 0 && (
+              <Button size="sm" variant="secondary" onClick={() => setOffset(offset - PAGE)}>
+                Anteriores
+              </Button>
             )}
-          </p>
+            {offset + PAGE < page.data.total && (
+              <Button size="sm" variant="secondary" onClick={() => setOffset(offset + PAGE)}>
+                Próximas
+              </Button>
+            )}
+          </div>
         </>
       )}
     </Layout>
