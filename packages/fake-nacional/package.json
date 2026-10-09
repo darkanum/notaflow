@@ -1,0 +1,21 @@
+{
+  "name": "@notaflow/fake-nacional",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@notaflow/provider-nacional": "workspace:*",
+    "@xmldom/xmldom": "^0.9.12"
+  },
+  "devDependencies": {
+    "@notaflow/signer-node": "workspace:*",
+    "@notaflow/test-kit": "workspace:*",
+    "undici": "^7.2.0"
+  }
+}
