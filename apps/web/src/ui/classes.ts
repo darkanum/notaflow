@@ -79,3 +79,7 @@ export const THEAD_CLASSES = 'border-b border-border text-xs uppercase tracking-
 export const TBODY_CLASSES = '[&_tr]:border-b [&_tr]:border-border [&_tr:last-child]:border-0';
 export const MODAL_PANEL_CLASSES =
   'relative z-10 max-h-full w-full max-w-md overflow-y-auto rounded border border-border bg-surface p-6 shadow-lg focus:outline-none';
+
+// NotaFlow compositions of Malphas tokens, used by every page.
+export const SECTION_TITLE_CLASSES = 'mb-3 font-display text-lg font-semibold text-fg';
+export const FORM_CLASSES = 'flex flex-col gap-4';
