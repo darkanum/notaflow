@@ -104,6 +104,30 @@ describe('InvoiceRepository', () => {
     expect(invoices.get(a, id)?.status).toBe('cancelled');
   });
 
+  test.each(['105102', '105104', '305101'])(
+    'event %s (substitution, granted analysis, ex officio) also cancels the invoice',
+    (code) => {
+      const invoices = new InvoiceRepository(db);
+      const before = invoices.upsertSynced(a, emitterId, providerInvoice(), null);
+      invoices.recordEvent(a, emitterId, providerEvent({ code }));
+      expect(invoices.get(a, before.id)?.status).toBe('cancelled');
+    },
+  );
+
+  test('a substitution event that arrives before the invoice cancels it on arrival', () => {
+    const invoices = new InvoiceRepository(db);
+    invoices.recordEvent(a, emitterId, providerEvent({ code: '105102' }));
+    const { id } = invoices.upsertSynced(a, emitterId, providerInvoice(), null);
+    expect(invoices.get(a, id)?.status).toBe('cancelled');
+  });
+
+  test('an event that does not cancel leaves the invoice issued', () => {
+    const invoices = new InvoiceRepository(db);
+    const { id } = invoices.upsertSynced(a, emitterId, providerInvoice(), null);
+    invoices.recordEvent(a, emitterId, providerEvent({ code: '101103' }));
+    expect(invoices.get(a, id)?.status).toBe('issued');
+  });
+
   test('findIdByAccessKey finds only an invoice of the account', () => {
     const invoices = new InvoiceRepository(db);
     const { id } = invoices.upsertSynced(a, emitterId, providerInvoice(), null);

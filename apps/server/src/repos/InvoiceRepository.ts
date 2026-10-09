@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import type { AccountContext, Environment, ProviderEvent, ProviderInvoice } from '@notaflow/core';
-import { and, asc, count, desc, eq, gte, like, lte, or, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, like, lte, or, type SQL } from 'drizzle-orm';
 import type { Database } from '../db/openDatabase';
 import { emitters, invoiceEvents, invoices } from '../db/schema';
 
 export type InvoiceStatus = (typeof invoices.$inferSelect)['status'];
-export const CANCELLATION = '101101';
+// Cancellation, cancellation by substitution, cancellation granted after fiscal analysis, ex officio.
+export const CANCELLING_EVENTS = ['101101', '105102', '105104', '305101'];
 
 export interface InvoiceFilter {
   emitterId?: string;
@@ -52,7 +53,10 @@ export class InvoiceRepository {
       .select({ id: invoiceEvents.id })
       .from(invoiceEvents)
       .where(
-        and(eq(invoiceEvents.accessKey, invoice.accessKey), eq(invoiceEvents.code, CANCELLATION)),
+        and(
+          eq(invoiceEvents.accessKey, invoice.accessKey),
+          inArray(invoiceEvents.code, CANCELLING_EVENTS),
+        ),
       )
       .get();
     const projection = {
@@ -131,7 +135,7 @@ export class InvoiceRepository {
       .onConflictDoNothing()
       .run();
     if (inserted.changes === 0) return false;
-    if (invoice && event.code === CANCELLATION) {
+    if (invoice && CANCELLING_EVENTS.includes(event.code)) {
       this.db
         .update(invoices)
         .set({ status: 'cancelled', updatedAt: new Date() })

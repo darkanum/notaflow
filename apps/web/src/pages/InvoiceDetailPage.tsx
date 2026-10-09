@@ -6,6 +6,13 @@ import { formatCents, formatCompetence, formatDate } from '../format';
 import { routeHref } from '../router';
 import { STATUS_TEXT } from './InvoicesPage';
 
+const EVENT_TEXT: Record<string, string> = {
+  '101101': 'Cancelamento',
+  '105102': 'Cancelamento por substituição',
+  '105104': 'Cancelamento deferido em análise fiscal',
+  '305101': 'Cancelamento de ofício',
+};
+
 export function InvoiceDetailPage(props: { accountId: string; invoiceId: string }) {
   const { accountId, invoiceId } = props;
   const url = `/api/accounts/${encodeURIComponent(accountId)}/invoices/${encodeURIComponent(invoiceId)}`;
@@ -68,7 +75,7 @@ export function InvoiceDetailPage(props: { accountId: string; invoiceId: string 
           <ul>
             {data.events.map((event) => (
               <li key={`${event.code}-${event.registeredAt}`}>
-                {event.code === '101101' ? 'Cancelamento' : `Evento ${event.code}`} em{' '}
+                {EVENT_TEXT[event.code] ?? `Evento ${event.code}`} em{' '}
                 {formatDate(event.registeredAt)}
                 {event.justification && `: ${event.justification}`}
               </li>
