@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { blob, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { blob, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 const id = () => text('id').primaryKey();
 const createdAt = () =>
@@ -97,3 +97,108 @@ export const auditLog = sqliteTable('audit_log', {
   detail: text('detail'),
   at: createdAt(),
 });
+
+const updatedAt = () =>
+  integer('updated_at', { mode: 'timestamp_ms' })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`);
+
+export const customers = sqliteTable(
+  'customers',
+  {
+    id: id(),
+    emitterId: text('emitter_id')
+      .notNull()
+      .references(() => emitters.id),
+    documentType: text('document_type', { enum: ['CNPJ', 'CPF', 'NIF', 'NONE'] }).notNull(),
+    document: text('document'),
+    name: text('name').notNull(),
+    municipalRegistration: text('municipal_registration'),
+    address: text('address', { mode: 'json' }),
+    email: text('email'),
+    phone: text('phone'),
+    origin: text('origin', { enum: ['manual', 'imported'] }).notNull(),
+    archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+    manualFields: text('manual_fields', { mode: 'json' })
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'`),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('customers_emitter_document').on(
+      table.emitterId,
+      table.documentType,
+      table.document,
+    ),
+  ],
+);
+
+export const invoices = sqliteTable('invoices', {
+  id: id(),
+  emitterId: text('emitter_id')
+    .notNull()
+    .references(() => emitters.id),
+  customerId: text('customer_id').references(() => customers.id),
+  accessKey: text('access_key').unique(),
+  number: text('number'),
+  dpsId: text('dps_id'),
+  dpsSeries: text('dps_series').notNull(),
+  dpsNumber: integer('dps_number').notNull(),
+  status: text('status', {
+    enum: ['pending', 'issued', 'rejected', 'unknown', 'cancelled'],
+  }).notNull(),
+  environment: text('environment', { enum: ['producao', 'producao_restrita'] }).notNull(),
+  issuedAt: integer('issued_at', { mode: 'timestamp_ms' }),
+  competence: text('competence').notNull(),
+  customerDocument: text('customer_document'),
+  customerName: text('customer_name'),
+  serviceCode: text('service_code').notNull(),
+  description: text('description').notNull(),
+  serviceCents: integer('service_cents').notNull(),
+  issCents: integer('iss_cents'),
+  netCents: integer('net_cents').notNull(),
+  origin: text('origin', { enum: ['synced', 'app'] }).notNull(),
+  templateOf: text('template_of'),
+  xmlGzip: blob('xml_gzip', { mode: 'buffer' }),
+  sefinMessages: text('sefin_messages', { mode: 'json' }),
+  createdBy: text('created_by').references(() => users.id),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export const invoiceEvents = sqliteTable(
+  'invoice_events',
+  {
+    id: id(),
+    emitterId: text('emitter_id')
+      .notNull()
+      .references(() => emitters.id),
+    invoiceId: text('invoice_id').references(() => invoices.id),
+    accessKey: text('access_key').notNull(),
+    code: text('code').notNull(),
+    reasonCode: text('reason_code'),
+    justification: text('justification'),
+    registeredAt: integer('registered_at', { mode: 'timestamp_ms' }).notNull(),
+    xmlGzip: blob('xml_gzip', { mode: 'buffer' }).notNull(),
+    createdBy: text('created_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (table) => [uniqueIndex('invoice_events_key_code').on(table.accessKey, table.code)],
+);
+
+export const syncState = sqliteTable(
+  'sync_state',
+  {
+    emitterId: text('emitter_id')
+      .notNull()
+      .references(() => emitters.id),
+    environment: text('environment', { enum: ['producao', 'producao_restrita'] }).notNull(),
+    lastNsu: integer('last_nsu').notNull().default(0),
+    lastRunAt: integer('last_run_at', { mode: 'timestamp_ms' }),
+    lastSuccessAt: integer('last_success_at', { mode: 'timestamp_ms' }),
+    lastError: text('last_error'),
+  },
+  (table) => [primaryKey({ columns: [table.emitterId, table.environment] })],
+);

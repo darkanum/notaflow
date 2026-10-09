@@ -1,3 +1,4 @@
+import type { AccountContext } from '@notaflow/core';
 import { type FakeNacional, startFakeNacional } from '@notaflow/fake-nacional';
 import type { FastifyInstance } from 'fastify';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
@@ -19,7 +20,12 @@ export interface TestApp {
   close(): Promise<void>;
 }
 
-export async function createTestApp(): Promise<TestApp> {
+export async function createTestApp(
+  options: {
+    logStream?: { write(line: string): void };
+    onEmitterCreated?: (ctx: AccountContext, emitterId: string) => void;
+  } = {},
+): Promise<TestApp> {
   const fake = await startFakeNacional();
   const { db, close } = openDatabase(':memory:');
   const { publicKey, privateKey } = await generateKeyPair('RS256');
@@ -38,6 +44,11 @@ export async function createTestApp(): Promise<TestApp> {
     config,
     db,
     verifyAccessToken: createAccessVerifier({ issuer: ISSUER, audience: AUDIENCE, jwks }),
+    ...(options.logStream ? { logStream: options.logStream } : {}),
+    // Tests sync explicitly; a background sync could outlive the in-memory database.
+    onEmitterCreated: options.onEmitterCreated ?? (() => {}),
+    // Production waits 1, 5, and 15 seconds; a test would hit its own timeout.
+    syncRetryDelaysMs: [0, 0],
   });
   await app.ready();
 

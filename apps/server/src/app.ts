@@ -1,3 +1,4 @@
+import type { AccountContext } from '@notaflow/core';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { remoteAccessVerifier, type VerifyAccessToken } from './auth/accessVerifier';
 import { registerAuth } from './auth/authHook';
@@ -5,15 +6,24 @@ import type { Config } from './config';
 import type { Database } from './db/openDatabase';
 import { handleError } from './httpError';
 import { nacionalProviderFactory, type ProviderFactory } from './providers/providerFactory';
+import { CertificateRepository } from './repos/CertificateRepository';
 import { IdentityRepository } from './repos/IdentityRepository';
 import { adminRoutes } from './routes/admin';
+import { auditRoutes } from './routes/audit';
+import { customerRoutes } from './routes/customers';
 import { emitterRoutes } from './routes/emitters';
+import { invoiceRoutes } from './routes/invoices';
 import { meRoutes } from './routes/me';
 import { memberRoutes } from './routes/members';
+import { syncRoutes } from './routes/sync';
+import { SyncService } from './sync/SyncService';
+import { VaultCertificateStore } from './vault/VaultCertificateStore';
+import { registerWeb } from './web';
 
 declare module 'fastify' {
   interface FastifyInstance {
     routeList: { method: string; url: string }[];
+    syncService: SyncService;
   }
 }
 
@@ -21,12 +31,19 @@ export interface AppDeps {
   config: Config;
   db: Database;
   verifyAccessToken?: VerifyAccessToken;
+  logStream?: { write(line: string): void };
   providerFactory?: ProviderFactory;
+  syncService?: SyncService;
+  syncRetryDelaysMs?: number[];
+  onEmitterCreated?: (ctx: AccountContext, emitterId: string) => void;
+  webRoot?: string;
 }
 
 export function buildApp(deps: AppDeps): FastifyInstance {
   const { config, db } = deps;
-  const app = Fastify({ logger: config.nodeEnv !== 'test' });
+  const app = Fastify({
+    logger: deps.logStream ? { stream: deps.logStream } : config.nodeEnv !== 'test',
+  });
   const routeList: { method: string; url: string }[] = [];
   app.decorate('routeList', routeList);
   app.addHook('onRoute', (route) => {
@@ -43,14 +60,34 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       : async () => '');
   registerAuth(app, { config, identities: new IdentityRepository(db), verifyAccessToken });
 
+  const providerFactory = deps.providerFactory ?? nacionalProviderFactory(config.nacionalUrls);
+  const syncService =
+    deps.syncService ??
+    new SyncService({
+      db,
+      certificates: new VaultCertificateStore(new CertificateRepository(db), config.masterKey),
+      providerFactory,
+      ...(deps.syncRetryDelaysMs ? { retryDelaysMs: deps.syncRetryDelaysMs } : {}),
+    });
+  app.decorate('syncService', syncService);
+  const onEmitterCreated =
+    deps.onEmitterCreated ??
+    ((ctx: AccountContext, emitterId: string) => {
+      syncService
+        .syncEmitter(ctx, emitterId)
+        .then((result) => app.log.info({ emitterId, ...result }, 'first sync finished'))
+        .catch((error: unknown) => app.log.warn({ emitterId, err: error }, 'first sync failed'));
+    });
+
   app.get('/api/health', async () => ({ status: 'ok' }));
   meRoutes(app);
   adminRoutes(app, db);
   memberRoutes(app, db);
-  emitterRoutes(app, {
-    db,
-    masterKey: config.masterKey,
-    providerFactory: deps.providerFactory ?? nacionalProviderFactory(config.nacionalUrls),
-  });
+  emitterRoutes(app, { db, masterKey: config.masterKey, providerFactory, onEmitterCreated });
+  syncRoutes(app, { db, sync: syncService });
+  invoiceRoutes(app, { db, masterKey: config.masterKey, providerFactory });
+  customerRoutes(app, db);
+  auditRoutes(app, db);
+  if (deps.webRoot) registerWeb(app, deps.webRoot);
   return app;
 }

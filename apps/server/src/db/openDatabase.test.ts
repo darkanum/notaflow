@@ -91,3 +91,16 @@ test('creates the parent folder of a database file that does not exist yet', () 
   expect(existsSync(path)).toBe(true);
   rmSync(root, { recursive: true, force: true });
 });
+
+test('the invoice migration adds the sync tables', () => {
+  const { db, close } = openDatabase(':memory:');
+  const tables = (
+    db.$client.prepare("select name from sqlite_master where type = 'table'").all() as {
+      name: string;
+    }[]
+  ).map((t) => t.name);
+  expect(tables).toEqual(
+    expect.arrayContaining(['customers', 'invoices', 'invoice_events', 'sync_state']),
+  );
+  close();
+});

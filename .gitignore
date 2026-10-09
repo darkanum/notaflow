@@ -16,3 +16,4 @@ __pycache__/
 .superpowers/
 .remember/
 .claude/settings.local.json
+.playwright-mcp/

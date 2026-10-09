@@ -1,0 +1,93 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #1d2433;
+  background: #f5f6f8;
+}
+body {
+  margin: 0;
+}
+header {
+  background: #1d2433;
+  padding: 12px 24px;
+}
+.brand {
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+}
+.card {
+  background: #fff;
+  border: 1px solid #dde1e8;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.list {
+  list-style: none;
+  padding: 0;
+}
+nav a,
+.actions > * {
+  margin-right: 12px;
+}
+.badge {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 1.1rem;
+  padding: 6px 12px;
+  border-radius: 6px;
+  margin: 8px 0;
+}
+.badge-production {
+  background: #c62828;
+  color: #fff;
+}
+.badge-test {
+  background: #f9a825;
+  color: #1d2433;
+}
+.warning {
+  color: #8a5300;
+}
+.error {
+  color: #c62828;
+}
+.message {
+  background: #e8f1ff;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+form label {
+  display: block;
+  margin-bottom: 12px;
+}
+form input,
+form select {
+  display: block;
+  margin-top: 4px;
+  padding: 6px;
+  min-width: 280px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+}
+th,
+td {
+  text-align: left;
+  padding: 8px;
+  border-bottom: 1px solid #dde1e8;
+}
+.status-cancelled {
+  color: #c62828;
+}
+label.button {
+  cursor: pointer;
+  text-decoration: underline;
+}

@@ -1,0 +1,16 @@
+# Web: AI Context
+
+The React UI, built with Vite. It talks only to the server API under `/api`.
+
+## Quick Reference
+
+- Entry: `src/main.tsx`; routes: `src/router.ts` (hash routes); API client and types: `src/api.ts`
+- Run: `pnpm dev:web` (proxies `/api` to `127.0.0.1:3000`); build: `pnpm build:web` (the server serves `apps/web/dist`)
+- Tests: Vitest with jsdom (`// @vitest-environment jsdom` at the top of a component test, and `cleanup()` after each test)
+
+## Key Rules
+
+1. UI text is in Brazilian Portuguese; code and comments are in English.
+2. Amounts arrive in cents; format them only with `formatCents`.
+3. Every API error code has a message in `ERROR_TEXT` (`src/components/Layout.tsx`).
+4. The environment badge is always visible where an emitter or invoice is shown.

@@ -3,6 +3,7 @@ import type { Config } from '../config';
 import { HttpError } from '../httpError';
 import type { IdentityRepository } from '../repos/IdentityRepository';
 import type { VerifyAccessToken } from './accessVerifier';
+import { isApiPath } from '../web';
 import { accountContext, adminContext } from './guards';
 
 const MUTATIONS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -15,7 +16,8 @@ export function registerAuth(
   app.addHook('onRequest', async (request) => {
     // The matched route, not the raw URL: the router decodes %61pi to api before matching.
     const route = request.routeOptions.url;
-    if (route === '/api/health' || (route !== undefined && !route.startsWith('/api/'))) return;
+    if (route === '/api/health') return;
+    if (route !== undefined ? !route.startsWith('/api/') : !isApiPath(request.url)) return;
     const email = await emailOf(request, deps.config, deps.verifyAccessToken);
     const identity = deps.identities.findByEmail(email);
     if (!identity) throw new HttpError(403, 'access_not_granted');
@@ -48,7 +50,11 @@ async function emailOf(
   if (typeof token !== 'string' || token === '') throw new HttpError(401, 'unauthenticated');
   try {
     return await verify(token);
-  } catch {
+  } catch (error) {
+    request.log.warn(
+      { reason: (error as { code?: string }).code ?? (error as Error).name },
+      'access token rejected',
+    );
     throw new HttpError(401, 'unauthenticated');
   }
 }

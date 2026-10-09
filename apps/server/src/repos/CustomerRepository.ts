@@ -1,0 +1,117 @@
+import { randomUUID } from 'node:crypto';
+import type { AccountContext, InvoiceParty } from '@notaflow/core';
+import { and, eq, like, or, type SQL } from 'drizzle-orm';
+import type { Database } from '../db/openDatabase';
+import { customers, emitters } from '../db/schema';
+
+export type CustomerRow = typeof customers.$inferSelect;
+type ManualField = 'name' | 'email' | 'phone' | 'municipalRegistration';
+
+export class CustomerRepository {
+  constructor(private readonly db: Database) {}
+
+  upsertImported(ctx: AccountContext, emitterId: string, party: InvoiceParty): string | null {
+    if (!party.document) return null;
+    this.requireEmitter(ctx, emitterId);
+    const { type, value } = party.document;
+    const imported = {
+      name: party.name,
+      email: party.email ?? null,
+      phone: party.phone ?? null,
+      municipalRegistration: party.municipalRegistration ?? null,
+      address: party.address ?? null,
+    };
+    const existing = this.db
+      .select()
+      .from(customers)
+      .where(
+        and(
+          eq(customers.emitterId, emitterId),
+          eq(customers.documentType, type),
+          eq(customers.document, value),
+        ),
+      )
+      .get();
+    if (!existing) {
+      const id = randomUUID();
+      this.db
+        .insert(customers)
+        .values({
+          id,
+          emitterId,
+          documentType: type,
+          document: value,
+          origin: 'imported',
+          ...imported,
+        })
+        .run();
+      return id;
+    }
+    const kept = new Set(existing.manualFields);
+    const changes = Object.fromEntries(
+      Object.entries(imported).filter(([field]) => !kept.has(field)),
+    );
+    this.db
+      .update(customers)
+      .set({ ...changes, updatedAt: new Date() })
+      .where(eq(customers.id, existing.id))
+      .run();
+    return existing.id;
+  }
+
+  setManual(
+    ctx: AccountContext,
+    customerId: string,
+    fields: Partial<Pick<CustomerRow, ManualField>>,
+  ): boolean {
+    const row = this.get(ctx, customerId);
+    if (!row) return false;
+    const manualFields = [...new Set([...row.manualFields, ...Object.keys(fields)])];
+    this.db
+      .update(customers)
+      .set({ ...fields, manualFields, updatedAt: new Date() })
+      .where(eq(customers.id, customerId))
+      .run();
+    return true;
+  }
+
+  list(ctx: AccountContext, filter: { emitterId?: string; search?: string }): CustomerRow[] {
+    const conditions: SQL[] = [
+      eq(emitters.accountId, ctx.accountId),
+      eq(customers.archived, false),
+    ];
+    if (filter.emitterId) conditions.push(eq(customers.emitterId, filter.emitterId));
+    if (filter.search) {
+      const pattern = `%${filter.search}%`;
+      const match = or(like(customers.name, pattern), like(customers.document, pattern));
+      if (match) conditions.push(match);
+    }
+    return this.db
+      .select({ customer: customers })
+      .from(customers)
+      .innerJoin(emitters, eq(emitters.id, customers.emitterId))
+      .where(and(...conditions))
+      .orderBy(customers.name)
+      .all()
+      .map((row) => row.customer);
+  }
+
+  private get(ctx: AccountContext, customerId: string): CustomerRow | null {
+    const row = this.db
+      .select({ customer: customers })
+      .from(customers)
+      .innerJoin(emitters, eq(emitters.id, customers.emitterId))
+      .where(and(eq(customers.id, customerId), eq(emitters.accountId, ctx.accountId)))
+      .get();
+    return row?.customer ?? null;
+  }
+
+  private requireEmitter(ctx: AccountContext, emitterId: string): void {
+    const emitter = this.db
+      .select({ id: emitters.id })
+      .from(emitters)
+      .where(and(eq(emitters.id, emitterId), eq(emitters.accountId, ctx.accountId)))
+      .get();
+    if (!emitter) throw new Error('Emitter not found in this account.');
+  }
+}

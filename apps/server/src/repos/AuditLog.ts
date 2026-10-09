@@ -1,4 +1,4 @@
-import { asc } from 'drizzle-orm';
+import { asc, desc } from 'drizzle-orm';
 import type { Database } from '../db/openDatabase';
 import { auditLog } from '../db/schema';
 
@@ -24,5 +24,9 @@ export class AuditLog {
 
   list() {
     return this.db.select().from(auditLog).orderBy(asc(auditLog.id)).all();
+  }
+
+  latest(limit: number) {
+    return this.db.select().from(auditLog).orderBy(desc(auditLog.id)).limit(limit).all();
   }
 }

@@ -11,6 +11,9 @@ export function createAccessVerifier(options: {
     const { payload } = await jwtVerify(token, options.jwks, {
       issuer: options.issuer,
       audience: options.audience,
+      // Cloudflare Access signs RS256 and always sets exp; anything else is not from Access.
+      algorithms: ['RS256'],
+      requiredClaims: ['exp', 'email'],
     });
     if (typeof payload.email !== 'string' || payload.email === '') {
       throw new Error('The Access token has no email.');
