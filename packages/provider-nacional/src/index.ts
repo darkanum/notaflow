@@ -17,7 +17,9 @@ export { createMtlsDispatcher } from './http/createMtlsDispatcher';
 export { ENDPOINTS } from './http/endpoints';
 export { gunzipBase64, gzipBase64 } from './http/gzipBase64';
 export { isDuplicateDps, NacionalClient, NacionalHttpError } from './http/NacionalClient';
+export { NacionalIssuer } from './NacionalIssuer';
 export { NacionalProvider } from './NacionalProvider';
+export { applyTemplate } from './template/applyTemplate';
 export { readTemplate, TemplateUnsupportedError } from './template/readTemplate';
 export type { DpsTemplate } from './template/readTemplate';
 export type {
