@@ -77,7 +77,7 @@ cloudflared ──► server (Fastify) ──► provider "nacional" ──► S
                    └──► SQLite (Docker volume), certificates encrypted at rest
 ```
 
-The app runs on the Vapulab VM (Ubuntu 24.04, Docker). The app container publishes no host port. Only the `cloudflared` container reaches it, on the internal Docker network.
+The app runs on the Vapulab VPS at Hostinger (Ubuntu 24.04, Docker), next to the Vapulab app. The app container publishes no host port. Only the shared northub `cloudflared` container reaches it, on the Docker network `northub_default`. A merge to `production` deploys it; see [Deploy on the Vapulab VPS](../../../TUTORIALS/DEPLOY_ON_VM.md).
 
 ### Packages
 

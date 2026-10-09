@@ -1,0 +1,17 @@
+# Only what the image needs; secrets and local data never go in.
+.git
+**/node_modules
+**/dist
+**/data
+.env*
+**/.env*
+**/*.pfx
+**/*.p12
+**/*.pem
+**/*.key
+.claude
+.superpowers
+.remember
+.playwright-mcp
+spikes/**/results.local.*
+services
