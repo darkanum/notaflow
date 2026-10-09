@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import {
+  ApiError,
   api,
   type Customer,
   type Draft,
@@ -97,19 +98,26 @@ function IssueFlow(props: {
   customers: Customer[];
 }) {
   const { accountId, base, draft, emitter, customers } = props;
-  const [form, setForm] = useState<Form>({
-    competence: previousMonthEnd(brasiliaToday()),
-    brl: centsInput(draft.serviceCents),
-    foreign: draft.foreign ? centsInput(draft.foreign.amountCents) : '',
-    description: draft.description,
-    customerId: SAME_CUSTOMER,
-  });
+  const storageKey = `notaflow-issue-${draft.templateInvoiceId}`;
+  // A send that may have reached the Sefin survives a reload, with its key and values.
+  const [pendingSend] = useState(() => readPendingSend(storageKey));
+  const [form, setForm] = useState<Form>(
+    pendingSend?.form ?? {
+      competence: previousMonthEnd(brasiliaToday()),
+      brl: centsInput(draft.serviceCents),
+      foreign: draft.foreign ? centsInput(draft.foreign.amountCents) : '',
+      description: draft.description,
+      customerId: SAME_CUSTOMER,
+    },
+  );
   const [rate, setRate] = useState<ExchangeRate | null>(null);
   const [rateError, setRateError] = useState<string | null>(null);
   // One key per review: a retry of the same confirmation must not issue twice.
-  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
+  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(pendingSend?.key ?? null);
+  // After an answer that does not say whether the invoice exists, only a retry with the same key is safe.
+  const [locked, setLocked] = useState(pendingSend !== null);
   const [busy, setBusy] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(pendingSend ? UNCERTAIN_TEXT : null);
   const [result, setResult] = useState<IssueResult | null>(null);
 
   const brlCents = parseCents(form.brl);
@@ -151,6 +159,7 @@ function IssueFlow(props: {
     if (!idempotencyKey || brlCents === null) return;
     setBusy(true);
     setSendError(null);
+    writePendingSend(storageKey, { key: idempotencyKey, form });
     try {
       const answer = await api.post<IssueResult>(
         `${base}/invoices/issue`,
@@ -164,13 +173,22 @@ function IssueFlow(props: {
         },
         { 'idempotency-key': idempotencyKey },
       );
+      clearPendingSend(storageKey);
+      setLocked(false);
       if (answer.status === 'issued') {
         window.location.hash = routeHref({ name: 'invoice', accountId, invoiceId: answer.id });
         return;
       }
       setResult(answer);
     } catch (error) {
-      setSendError(errorText(error));
+      if (isDefinitive(error)) {
+        clearPendingSend(storageKey);
+        setLocked(false);
+        setSendError(errorText(error));
+      } else {
+        setLocked(true);
+        setSendError(UNCERTAIN_TEXT);
+      }
     } finally {
       setBusy(false);
     }
@@ -294,11 +312,17 @@ function IssueFlow(props: {
             disabled={busy}
             onClick={() => void confirm()}
           >
-            {production ? 'Emitir em PRODUÇÃO' : 'Emitir em produção restrita'}
+            {locked
+              ? 'Tentar de novo'
+              : production
+                ? 'Emitir em PRODUÇÃO'
+                : 'Emitir em produção restrita'}
           </Button>
-          <Button variant="secondary" disabled={busy} onClick={() => setIdempotencyKey(null)}>
-            Voltar e editar
-          </Button>
+          {!locked && (
+            <Button variant="secondary" disabled={busy} onClick={() => setIdempotencyKey(null)}>
+              Voltar e editar
+            </Button>
+          )}
           {busy && <Spinner label="Emitindo" />}
         </div>
       </Layout>
@@ -376,4 +400,48 @@ function IssueFlow(props: {
       </form>
     </Layout>
   );
+}
+
+const UNCERTAIN_TEXT =
+  'Não houve resposta clara. A nota pode ter sido emitida: tente de novo aqui, sem emitir outra.';
+
+// A 4xx answer means the server refused before reserving a DPS number; anything else may have issued.
+function isDefinitive(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    error.status !== 408 &&
+    error.status !== 429
+  );
+}
+
+interface PendingSend {
+  key: string;
+  form: Form;
+}
+
+function readPendingSend(storageKey: string): PendingSend | null {
+  try {
+    const raw = sessionStorage.getItem(storageKey);
+    return raw ? (JSON.parse(raw) as PendingSend) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePendingSend(storageKey: string, value: PendingSend): void {
+  try {
+    sessionStorage.setItem(storageKey, JSON.stringify(value));
+  } catch {
+    // Without storage, a reload loses the key; the server state is still safe.
+  }
+}
+
+function clearPendingSend(storageKey: string): void {
+  try {
+    sessionStorage.removeItem(storageKey);
+  } catch {
+    // Nothing to clear.
+  }
 }

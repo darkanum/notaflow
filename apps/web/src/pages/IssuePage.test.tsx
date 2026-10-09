@@ -16,6 +16,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  sessionStorage.clear();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   window.location.hash = '';
@@ -25,7 +26,7 @@ const draft = {
   templateInvoiceId: 'inv1',
   emitterId: 'em1',
   competence: '2026-08-31',
-  serviceCents: 1086420,
+  serviceCents: 500000,
   description: 'Serviços de TI',
   customer: { document: { type: 'NIF', value: '00-0000000' }, name: 'Foreign Customer Inc' },
   foreign: { currency: 'USD', currencyCode: '220', amountCents: 200000 },
@@ -46,7 +47,7 @@ const base = {
 };
 
 test('the PTAX button fills the BRL amount from the foreign amount', async () => {
-  stubApi({
+  const calls = stubApi({
     ...base,
     '/api/accounts/acc/exchange-rate': {
       currency: 'USD',
@@ -61,6 +62,10 @@ test('the PTAX button fills the BRL amount from the foreign amount', async () =>
   await user.click(await screen.findByRole('button', { name: /cotação ptax/i }));
   expect(await screen.findByDisplayValue('10.864,20')).toBeTruthy();
   expect(screen.getByText(/PTAX venda de 31\/08\/2026: 5,4321/)).toBeTruthy();
+  const competence = (screen.getByLabelText('Competência') as HTMLInputElement).value;
+  expect(calls.some((c) => c.url.endsWith(`/exchange-rate?currency=220&date=${competence}`))).toBe(
+    true,
+  );
 });
 
 test('a PTAX failure keeps the BRL amount editable and says so', async () => {
@@ -87,7 +92,7 @@ test('the review shows PRODUÇÃO, highlights changes, and sends one key on a re
   expect(screen.getByRole('row', { name: /descrição/i }).className).toContain('bg-warning/10');
   expect(screen.getByRole('row', { name: /tomador/i }).className).not.toContain('bg-warning/10');
   await user.click(screen.getByRole('button', { name: /emitir em produção/i }));
-  await user.click(await screen.findByRole('button', { name: /emitir em produção/i }));
+  await user.click(await screen.findByRole('button', { name: /tentar de novo/i }));
   await waitFor(() =>
     expect(calls.filter((c) => c.url.endsWith('/invoices/issue'))).toHaveLength(2),
   );
@@ -107,4 +112,53 @@ test('an issued invoice opens its detail', async () => {
   await user.click(await screen.findByRole('button', { name: /revisar/i }));
   await user.click(screen.getByRole('button', { name: /emitir em produção/i }));
   await waitFor(() => expect(window.location.hash).toBe('#/a/acc/invoices/new1'));
+});
+
+test('after an uncertain send error the form cannot go back, and a retry keeps the key', async () => {
+  const calls = stubApi({
+    ...base,
+    '/api/accounts/acc/invoices/issue': { error: 'sefin_unavailable' },
+  });
+  render(<IssuePage accountId="acc" invoiceId="inv1" />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: /revisar/i }));
+  await user.click(screen.getByRole('button', { name: /emitir em produção/i }));
+  expect(await screen.findByText(/pode ter sido emitida/i)).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /voltar e editar/i })).toBeNull();
+  await user.click(screen.getByRole('button', { name: /tentar de novo/i }));
+  await waitFor(() =>
+    expect(calls.filter((c) => c.url.endsWith('/invoices/issue'))).toHaveLength(2),
+  );
+  const keys = calls
+    .filter((c) => c.url.endsWith('/invoices/issue'))
+    .map((c) => new Headers(c.init?.headers).get('idempotency-key'));
+  expect(keys).toEqual([KEY, KEY]);
+});
+
+test('a reload after an uncertain send keeps the key and the reviewed values', async () => {
+  const calls = stubApi({ ...base, '/api/accounts/acc/invoices/issue': { error: 'http_524' } });
+  const first = render(<IssuePage accountId="acc" invoiceId="inv1" />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: /revisar/i }));
+  await user.click(screen.getByRole('button', { name: /emitir em produção/i }));
+  expect(await screen.findByText(/pode ter sido emitida/i)).toBeTruthy();
+  first.unmount();
+  render(<IssuePage accountId="acc" invoiceId="inv1" />);
+  await user.click(await screen.findByRole('button', { name: /tentar de novo/i }));
+  await waitFor(() =>
+    expect(calls.filter((c) => c.url.endsWith('/invoices/issue'))).toHaveLength(2),
+  );
+  const keys = calls
+    .filter((c) => c.url.endsWith('/invoices/issue'))
+    .map((c) => new Headers(c.init?.headers).get('idempotency-key'));
+  expect(keys).toEqual([KEY, KEY]);
+});
+
+test('a validation refusal is definitive: the user can go back and edit', async () => {
+  stubApi({ ...base, '/api/accounts/acc/invoices/issue': { error: 'invalid_amount' } });
+  render(<IssuePage accountId="acc" invoiceId="inv1" />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: /revisar/i }));
+  await user.click(screen.getByRole('button', { name: /emitir em produção/i }));
+  expect(await screen.findByRole('button', { name: /voltar e editar/i })).toBeTruthy();
 });

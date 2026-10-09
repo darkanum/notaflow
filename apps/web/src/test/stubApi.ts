@@ -6,6 +6,8 @@ const ERROR_STATUS: Record<string, number> = {
   ptax_unavailable: 502,
   sefin_unavailable: 502,
   sefin_rejected: 422,
+  invalid_amount: 400,
+  http_524: 524,
 };
 
 export interface StubCall {

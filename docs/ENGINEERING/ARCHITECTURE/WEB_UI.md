@@ -37,4 +37,4 @@ The tokens switch to dark colors when the OS asks for dark, unless the page sets
 | `#/a/:accountId/customers/:customerId` | Customer edit by hand |
 | `#/a/:accountId/members` | Members |
 
-The issue review and the cancel dialog show the environment badge, and their confirm buttons name the environment ("Emitir em PRODUÇÃO", "Cancelar em PRODUÇÃO"). The issue form keeps one `Idempotency-Key` per review, so a double click or a retry cannot issue twice.
+The issue review and the cancel dialog show the environment badge, and their confirm buttons name the environment ("Emitir em PRODUÇÃO", "Cancelar em PRODUÇÃO"). The issue form keeps one `Idempotency-Key` per review. After an answer that does not say whether the invoice exists (a network error, a 5xx, or a proxy timeout such as Cloudflare's 524), the review allows only "Tentar de novo" with the same key, and the key and the reviewed values survive a reload (`sessionStorage`). A 4xx answer is definitive: the server refused before reserving a number, so the user may edit again.

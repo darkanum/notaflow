@@ -28,7 +28,7 @@ A synced invoice starts as `issued` or `cancelled`. Only an invoice issued by th
 
 ## Idempotency
 
-The issue form sends an `Idempotency-Key` header, one per review. The key is stored on the pending row, unique per emitter. A repeat with the same key answers `200` with the first row's current state and reserves nothing, also when two requests arrive at the same time. Without the header, every call is a new issue.
+The issue form sends an `Idempotency-Key` header, one per review, and keeps it after an unclear answer (see [Web UI](WEB_UI.md)). The key is stored on the pending row, unique per emitter. A repeat with the same key answers `200` with the first row's current state and reserves nothing, also when two requests arrive at the same time. Without the header, every call is a new issue.
 
 ## E0014
 
