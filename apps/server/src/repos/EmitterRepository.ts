@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { AccountContext, Environment } from '@notaflow/core';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import type { Database } from '../db/openDatabase';
-import { emitters } from '../db/schema';
+import { emitters, invoices } from '../db/schema';
 
 export type EmitterRow = typeof emitters.$inferSelect;
 export type NewEmitter = Omit<
@@ -54,6 +54,21 @@ export class EmitterRepository {
       .values({ ...input, id: randomUUID(), accountId: ctx.accountId })
       .returning()
       .get();
+  }
+
+  reserveDpsNumber(ctx: AccountContext, emitterId: string): number {
+    // One UPDATE ... RETURNING: SQLite runs it atomically, so two requests never get one number.
+    // Invoices issued before the app used numbers of the same series; a reused number gets E0014.
+    const usedAbove = sql`(SELECT coalesce(max(${invoices.dpsNumber}), 0) + 1 FROM ${invoices}
+      WHERE ${invoices.emitterId} = ${emitters.id} AND ${invoices.dpsSeries} = ${emitters.dpsSeries})`;
+    const row = this.db
+      .update(emitters)
+      .set({ nextDpsNumber: sql`max(${emitters.nextDpsNumber}, ${usedAbove}) + 1` })
+      .where(and(eq(emitters.id, emitterId), eq(emitters.accountId, ctx.accountId)))
+      .returning({ next: emitters.nextDpsNumber })
+      .get();
+    if (!row) throw new Error('Emitter not found in this account.');
+    return row.next - 1;
   }
 
   setEnvironment(ctx: AccountContext, emitterId: string, environment: Environment): boolean {

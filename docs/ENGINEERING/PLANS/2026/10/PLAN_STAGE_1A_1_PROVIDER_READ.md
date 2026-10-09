@@ -307,7 +307,7 @@ test.each([
   ['0.00', 0],
   ['10', 1000],
   ['10.5', 1050],
-  ['18135.60', 1813560],
+  ['6703.21', 670321],
   ['1234567.89', 123456789],
 ])('decimalToCents(%s) = %i', (value, cents) => {
   expect(decimalToCents(value)).toBe(cents);

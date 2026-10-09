@@ -5,7 +5,7 @@ import type { Database } from '../db/openDatabase';
 import { customers, emitters } from '../db/schema';
 
 export type CustomerRow = typeof customers.$inferSelect;
-type ManualField = 'name' | 'email' | 'phone' | 'municipalRegistration';
+export type ManualField = 'name' | 'email' | 'phone' | 'municipalRegistration' | 'address';
 
 export class CustomerRepository {
   constructor(private readonly db: Database) {}
@@ -96,7 +96,7 @@ export class CustomerRepository {
       .map((row) => row.customer);
   }
 
-  private get(ctx: AccountContext, customerId: string): CustomerRow | null {
+  get(ctx: AccountContext, customerId: string): CustomerRow | null {
     const row = this.db
       .select({ customer: customers })
       .from(customers)

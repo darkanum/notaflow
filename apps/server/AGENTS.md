@@ -1,6 +1,6 @@
 # Server: AI Context
 
-The Fastify API: authentication, accounts and roles, the certificate vault, emitter onboarding, and the audit log. Plan 1a-3 adds the sync job and the read API.
+The Fastify API: authentication, accounts and roles, the certificate vault, emitter onboarding, the audit log, the ADN sync, the read API, and (Stage 1b-1) issue, reconcile, cancel, and customer edits.
 
 ## Quick Reference
 
@@ -13,6 +13,7 @@ The Fastify API: authentication, accounts and roles, the certificate vault, emit
 
 - [Tenancy](../../docs/ENGINEERING/ARCHITECTURE/TENANCY.md) - accounts, roles, guards, and the route sweep
 - [ADN Sync](../../docs/ENGINEERING/ARCHITECTURE/SYNC.md) - cursor, retries, and document rules
+- [Invoice Lifecycle](../../docs/ENGINEERING/ARCHITECTURE/INVOICE_LIFECYCLE.md) - issue, E0014, reconcile, cancel, and the PTAX rule
 - [Certificate Vault](../../docs/ENGINEERING/ARCHITECTURE/CERTIFICATE_VAULT.md) - envelope encryption and key rotation
 - [RFC](../../docs/ENGINEERING/RFCS/2026/10/RFC_NFSE_EMITTER.md) - flows and the security model
 
@@ -22,3 +23,4 @@ The Fastify API: authentication, accounts and roles, the certificate vault, emit
 2. A new route with a new path parameter must be added to the route sweep (`src/routes/routeSweep.test.ts`).
 3. Never log or return a certificate, a password, or the master key.
 4. A schema change needs a new migration in the same commit.
+5. Never resend a DPS without a lookup by DPS id first, and never with a new number (`IssueService.reconcile`).

@@ -16,8 +16,12 @@ export type { CancelEventInput, CancelReason } from './events/buildCancelEventXm
 export { createMtlsDispatcher } from './http/createMtlsDispatcher';
 export { ENDPOINTS } from './http/endpoints';
 export { gunzipBase64, gzipBase64 } from './http/gzipBase64';
-export { NacionalClient, NacionalHttpError } from './http/NacionalClient';
+export { isDuplicateDps, NacionalClient, NacionalHttpError } from './http/NacionalClient';
+export { NacionalIssuer } from './NacionalIssuer';
 export { NacionalProvider } from './NacionalProvider';
+export { applyTemplate } from './template/applyTemplate';
+export { readTemplate, TemplateUnsupportedError } from './template/readTemplate';
+export type { DpsTemplate } from './template/readTemplate';
 export type {
   DfeBatch,
   DfeDocument,

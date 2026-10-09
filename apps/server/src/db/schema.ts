@@ -157,6 +157,8 @@ export const invoices = sqliteTable('invoices', {
   serviceCode: text('service_code').notNull(),
   description: text('description').notNull(),
   serviceCents: integer('service_cents').notNull(),
+  // Export invoices issued by the app: a resend of the same DPS needs the same amount.
+  foreignAmountCents: integer('foreign_amount_cents'),
   issCents: integer('iss_cents'),
   netCents: integer('net_cents').notNull(),
   origin: text('origin', { enum: ['synced', 'app'] }).notNull(),

@@ -1,0 +1,1 @@
+ALTER TABLE `invoices` ADD `foreign_amount_cents` integer;

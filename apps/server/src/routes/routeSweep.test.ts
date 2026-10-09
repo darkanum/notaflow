@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { seedTenant, seedUser } from '../../test/fixtures';
 import { createTestApp, type TestApp } from '../../test/testApp';
 import { providerInvoice } from '../../test/providerData';
+import { CustomerRepository } from '../repos/CustomerRepository';
 import { EmitterRepository } from '../repos/EmitterRepository';
 import { InvoiceRepository } from '../repos/InvoiceRepository';
 
@@ -22,11 +23,16 @@ beforeAll(async () => {
     dpsSeries: '900',
   });
   const invoice = new InvoiceRepository(t.db).upsertSynced(a, emitter.id, providerInvoice(), null);
+  const customerId = new CustomerRepository(t.db).upsertImported(a, emitter.id, {
+    document: { type: 'CNPJ', value: '98765432000110' },
+    name: 'Cliente Exemplo Ltda',
+  });
   params = {
     accountId: a.accountId,
     emitterId: emitter.id,
     userId: a.userId,
     invoiceId: invoice.id,
+    customerId: customerId ?? '',
   };
 });
 afterAll(() => t.close());

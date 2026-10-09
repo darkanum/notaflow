@@ -1,11 +1,18 @@
 import type { AccountContext } from '@notaflow/core';
 import Fastify, { type FastifyInstance } from 'fastify';
+import type { Dispatcher } from 'undici';
 import { remoteAccessVerifier, type VerifyAccessToken } from './auth/accessVerifier';
 import { registerAuth } from './auth/authHook';
 import type { Config } from './config';
 import type { Database } from './db/openDatabase';
 import { handleError } from './httpError';
-import { nacionalProviderFactory, type ProviderFactory } from './providers/providerFactory';
+import { IssueService } from './issue/IssueService';
+import {
+  type IssuerFactory,
+  nacionalIssuerFactory,
+  nacionalProviderFactory,
+  type ProviderFactory,
+} from './providers/providerFactory';
 import { CertificateRepository } from './repos/CertificateRepository';
 import { IdentityRepository } from './repos/IdentityRepository';
 import { adminRoutes } from './routes/admin';
@@ -13,6 +20,7 @@ import { auditRoutes } from './routes/audit';
 import { customerRoutes } from './routes/customers';
 import { emitterRoutes } from './routes/emitters';
 import { invoiceRoutes } from './routes/invoices';
+import { issueRoutes } from './routes/issue';
 import { meRoutes } from './routes/me';
 import { memberRoutes } from './routes/members';
 import { syncRoutes } from './routes/sync';
@@ -33,6 +41,8 @@ export interface AppDeps {
   verifyAccessToken?: VerifyAccessToken;
   logStream?: { write(line: string): void };
   providerFactory?: ProviderFactory;
+  issuerFactory?: IssuerFactory;
+  ptaxDispatcher?: Dispatcher;
   syncService?: SyncService;
   syncRetryDelaysMs?: number[];
   onEmitterCreated?: (ctx: AccountContext, emitterId: string) => void;
@@ -61,11 +71,12 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerAuth(app, { config, identities: new IdentityRepository(db), verifyAccessToken });
 
   const providerFactory = deps.providerFactory ?? nacionalProviderFactory(config.nacionalUrls);
+  const certificates = new VaultCertificateStore(new CertificateRepository(db), config.masterKey);
   const syncService =
     deps.syncService ??
     new SyncService({
       db,
-      certificates: new VaultCertificateStore(new CertificateRepository(db), config.masterKey),
+      certificates,
       providerFactory,
       ...(deps.syncRetryDelaysMs ? { retryDelaysMs: deps.syncRetryDelaysMs } : {}),
     });
@@ -86,6 +97,12 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   emitterRoutes(app, { db, masterKey: config.masterKey, providerFactory, onEmitterCreated });
   syncRoutes(app, { db, sync: syncService });
   invoiceRoutes(app, { db, masterKey: config.masterKey, providerFactory });
+  const issue = new IssueService({
+    db,
+    certificates,
+    issuerFactory: deps.issuerFactory ?? nacionalIssuerFactory(config.nacionalUrls),
+  });
+  issueRoutes(app, { issue, ...(deps.ptaxDispatcher ? { ptaxDispatcher: deps.ptaxDispatcher } : {}) });
   customerRoutes(app, db);
   auditRoutes(app, db);
   if (deps.webRoot) registerWeb(app, deps.webRoot);

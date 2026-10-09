@@ -40,9 +40,9 @@ const invoice = {
   customerName: 'Foreign Customer Inc',
   serviceCode: '010701',
   description: 'Serviços de TI',
-  serviceCents: 1813560,
+  serviceCents: 670321,
   issCents: null,
-  netCents: 1813560,
+  netCents: 670321,
 };
 
 test('lists invoices with BRL amounts and the cancelled status', async () => {
@@ -52,7 +52,7 @@ test('lists invoices with BRL amounts and the cancelled status', async () => {
   });
   render(<InvoicesPage accountId="acc" />);
   expect(await screen.findByText('Foreign Customer Inc')).toBeTruthy();
-  expect(screen.getByText(/18\.135,60/)).toBeTruthy();
+  expect(screen.getByText(/6\.703,21/)).toBeTruthy();
   expect(screen.getByRole('cell', { name: /cancelada/i })).toBeTruthy();
 });
 
