@@ -125,6 +125,13 @@ describe('AdminRepository', () => {
   });
 });
 
+test('setPlatformRole makes a user a platform admin', () => {
+  const admin = adminOf(seedUser(db, 'admin@example.com', 'admin'));
+  const userId = seedUser(db, 'user@example.com');
+  expect(new AdminRepository(db).setPlatformRole(admin, userId, 'admin')).toBe(true);
+  expect(new IdentityRepository(db).findByEmail('user@example.com')?.platformRole).toBe('admin');
+});
+
 describe('AuditLog', () => {
   test('records entries in order', () => {
     const log = new AuditLog(db);

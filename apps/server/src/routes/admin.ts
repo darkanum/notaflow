@@ -1,0 +1,141 @@
+import type { FastifyInstance } from 'fastify';
+import { adminContext, identityOf } from '../auth/guards';
+import type { Database } from '../db/openDatabase';
+import { HttpError } from '../httpError';
+import { AdminRepository } from '../repos/AdminRepository';
+import { AuditLog } from '../repos/AuditLog';
+
+const email = { type: 'string', format: 'email', maxLength: 254 } as const;
+const name = { type: 'string', minLength: 1, maxLength: 200 } as const;
+
+export function adminRoutes(app: FastifyInstance, db: Database): void {
+  const admin = new AdminRepository(db);
+  const audit = new AuditLog(db);
+
+  app.get('/api/admin/accounts', async (request) => admin.listAccounts(adminContext(request)));
+
+  app.post<{ Body: { name: string } }>(
+    '/api/admin/accounts',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['name'],
+          additionalProperties: false,
+          properties: { name },
+        },
+      },
+    },
+    async (request, reply) => {
+      const id = admin.createAccount(adminContext(request), request.body.name);
+      audit.record({
+        userEmail: identityOf(request).email,
+        accountId: id,
+        action: 'account.create',
+        entity: id,
+        result: 'ok',
+      });
+      return reply.status(201).send({ id });
+    },
+  );
+
+  app.post<{ Params: { accountId: string }; Body: { status: 'active' | 'suspended' } }>(
+    '/api/admin/accounts/:accountId/status',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['status'],
+          additionalProperties: false,
+          properties: { status: { enum: ['active', 'suspended'] } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { accountId } = request.params;
+      if (!admin.setAccountStatus(adminContext(request), accountId, request.body.status)) {
+        throw new HttpError(404, 'not_found');
+      }
+      audit.record({
+        userEmail: identityOf(request).email,
+        accountId,
+        action: 'account.status',
+        entity: accountId,
+        result: 'ok',
+        detail: request.body.status,
+      });
+      return reply.status(204).send();
+    },
+  );
+
+  app.post<{ Body: { email: string; name: string; platformRole?: 'admin' | 'user' } }>(
+    '/api/admin/users',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['email', 'name'],
+          additionalProperties: false,
+          properties: { email, name, platformRole: { enum: ['admin', 'user'] } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const ctx = adminContext(request);
+      const id = admin.createUser(ctx, request.body.email, request.body.name);
+      const actor = identityOf(request).email;
+      if (!id) {
+        audit.record({
+          userEmail: actor,
+          accountId: null,
+          action: 'user.create',
+          entity: request.body.email.toLowerCase(),
+          result: 'refused',
+          detail: 'exists',
+        });
+        throw new HttpError(409, 'user_exists');
+      }
+      if (request.body.platformRole === 'admin') admin.setPlatformRole(ctx, id, 'admin');
+      audit.record({
+        userEmail: actor,
+        accountId: null,
+        action: 'user.create',
+        entity: id,
+        result: 'ok',
+      });
+      return reply.status(201).send({ id });
+    },
+  );
+
+  app.put<{
+    Params: { accountId: string; userId: string };
+    Body: { role: 'owner' | 'member' };
+  }>(
+    '/api/admin/accounts/:accountId/members/:userId',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['role'],
+          additionalProperties: false,
+          properties: { role: { enum: ['owner', 'member'] } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { accountId, userId } = request.params;
+      if (!admin.setMembership(adminContext(request), accountId, userId, request.body.role)) {
+        throw new HttpError(404, 'not_found');
+      }
+      audit.record({
+        userEmail: identityOf(request).email,
+        accountId,
+        action: 'membership.set',
+        entity: userId,
+        result: 'ok',
+        detail: request.body.role,
+      });
+      return reply.status(204).send();
+    },
+  );
+}

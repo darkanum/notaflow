@@ -44,6 +44,12 @@ export class AdminRepository {
     return id;
   }
 
+  setPlatformRole(_ctx: AdminContext, userId: string, platformRole: 'admin' | 'user'): boolean {
+    return (
+      this.db.update(users).set({ platformRole }).where(eq(users.id, userId)).run().changes > 0
+    );
+  }
+
   setMembership(_ctx: AdminContext, accountId: string, userId: string, role: AccountRole): boolean {
     const account = this.db.select().from(accounts).where(eq(accounts.id, accountId)).get();
     const user = this.db.select().from(users).where(eq(users.id, userId)).get();

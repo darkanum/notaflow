@@ -5,7 +5,9 @@ import type { Config } from './config';
 import type { Database } from './db/openDatabase';
 import { handleError } from './httpError';
 import { IdentityRepository } from './repos/IdentityRepository';
+import { adminRoutes } from './routes/admin';
 import { meRoutes } from './routes/me';
+import { memberRoutes } from './routes/members';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -40,5 +42,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   app.get('/api/health', async () => ({ status: 'ok' }));
   meRoutes(app);
+  adminRoutes(app, db);
+  memberRoutes(app, db);
   return app;
 }
