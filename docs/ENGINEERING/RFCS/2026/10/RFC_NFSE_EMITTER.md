@@ -206,7 +206,7 @@ The main threat: a person who gets into an account can issue and cancel invoices
 
 - **Cloudflare Access authenticates.** It proves the person owns the email. The Access policy accepts any authenticated email. Login is one-time PIN by email now. Google becomes an identity provider later, in the Cloudflare dashboard, with no app change.
 - **The app authorizes.** The server validates the Access JWT (`Cf-Access-Jwt-Assertion`) against the team public keys and the application `AUD`. The email from the token must exist in `users`. An unknown email sees "access not granted".
-- **The first user** is `lincoln.santos86@gmail.com` with `platform_role = admin`. A seed command creates it at install time.
+- **The first user** is `lincoln.giacomini@gmail.com` with `platform_role = admin`. A seed command creates it at install time.
 - **Local development** uses `AUTH_MODE=dev` with a fixed email. The server refuses to start with `AUTH_MODE=dev` and `NODE_ENV=production`.
 - **Mutations** require `Content-Type: application/json` and an `Origin` equal to the app domain. This blocks CSRF with the Access cookie.
 
