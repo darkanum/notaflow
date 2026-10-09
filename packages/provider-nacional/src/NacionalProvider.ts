@@ -46,7 +46,12 @@ export class NacionalProvider implements InvoiceProvider {
         return { kind: 'invoice', nsu, invoice };
       }
       if (document.type === 'EVENTO') {
-        return { kind: 'event', nsu, event: parseEventXml(document.xml) };
+        const event = parseEventXml(document.xml);
+        // The key holds the issuer CNPJ after municipality (7), environment (1), and type (1).
+        if (event.accessKey.slice(9, 23) !== this.emitterCnpj) {
+          return { kind: 'skipped', nsu, reason: 'received invoice event' };
+        }
+        return { kind: 'event', nsu, event };
       }
       return { kind: 'skipped', nsu, reason: `document type ${document.type}` };
     } catch (error) {

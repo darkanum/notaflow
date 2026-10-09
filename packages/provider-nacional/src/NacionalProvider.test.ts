@@ -83,6 +83,18 @@ test('an invoice issued by another CNPJ is skipped as received', async () => {
   ]);
 });
 
+test('an event for an invoice of another CNPJ is skipped as received', async () => {
+  // Access key layout: municipality (7), environment (1), registration type (1), then the CNPJ (14).
+  const received = readFixture('EVENT_CANCEL.xml').replace(
+    /<chNFSe>[0-9A-Z]{50}<\/chNFSe>/,
+    '<chNFSe>35503082298765432000110000000000004226100000000420</chNFSe>',
+  );
+  replyBatch(0, [item(1, 'EVENTO', received)]);
+  expect((await provider.fetchSince(0)).documents).toEqual([
+    { kind: 'skipped', nsu: 1, reason: 'received invoice event' },
+  ]);
+});
+
 test('an unknown document type is skipped with its type', async () => {
   replyBatch(0, [item(1, 'DPS_PENDENTE', '<x/>')]);
   expect((await provider.fetchSince(0)).documents).toEqual([
