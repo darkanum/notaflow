@@ -10,7 +10,7 @@ export function memberRoutes(app: FastifyInstance, db: Database): void {
   const audit = new AuditLog(db);
 
   app.get<{ Params: { accountId: string } }>('/api/accounts/:accountId/members', async (request) =>
-    members.list(accountContext(request, request.params.accountId)),
+    members.list(accountContext(request, request.params.accountId, { owner: true })),
   );
 
   app.post<{ Params: { accountId: string }; Body: { email: string; name: string } }>(

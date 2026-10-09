@@ -75,3 +75,14 @@ test('a suspended account can list members but cannot invite', async () => {
   expect(invite.statusCode).toBe(403);
   expect(invite.json()).toEqual({ error: 'account_suspended' });
 });
+
+test('a member cannot list the account users: 403 owner_only', async () => {
+  const a = seedTenant(t.db, { accountName: 'A', email: 'member@example.com', role: 'member' });
+  const response = await t.app.inject({
+    method: 'GET',
+    url: `/api/accounts/${a.accountId}/members`,
+    headers: await t.as('member@example.com'),
+  });
+  expect(response.statusCode).toBe(403);
+  expect(response.json()).toEqual({ error: 'owner_only' });
+});
