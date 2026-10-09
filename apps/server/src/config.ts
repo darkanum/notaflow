@@ -33,16 +33,25 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
   }
   const databasePath = required('DATABASE_PATH');
   const appOrigin = required('APP_ORIGIN');
+  if (appOrigin && originOf(appOrigin) !== appOrigin) {
+    problems.push(
+      'APP_ORIGIN must be an origin such as https://nfse.example.com, with no path or trailing slash',
+    );
+  }
+  const port = Number(env.PORT ?? 3000);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    problems.push('PORT must be a whole number from 1 to 65535');
+  }
   const masterKey = Buffer.from(env.NFSE_MASTER_KEY ?? '', 'base64');
   if (masterKey.length !== 32) problems.push('NFSE_MASTER_KEY must be 32 bytes in base64');
 
   let auth: AuthConfig = { mode: 'dev', email: '' };
   if (env.AUTH_MODE === 'access') {
-    auth = {
-      mode: 'access',
-      teamDomain: required('CF_ACCESS_TEAM_DOMAIN'),
-      audience: required('CF_ACCESS_AUD'),
-    };
+    const teamDomain = required('CF_ACCESS_TEAM_DOMAIN');
+    if (teamDomain && !/^[a-z0-9.-]+$/i.test(teamDomain)) {
+      problems.push('CF_ACCESS_TEAM_DOMAIN must be a host name such as team.cloudflareaccess.com');
+    }
+    auth = { mode: 'access', teamDomain, audience: required('CF_ACCESS_AUD') };
   } else if (env.AUTH_MODE === 'dev') {
     if (nodeEnv === 'production') {
       problems.push('AUTH_MODE=dev is not allowed with NODE_ENV=production');
@@ -62,11 +71,19 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
   return {
     nodeEnv: nodeEnv as Config['nodeEnv'],
     host: env.HOST ?? '127.0.0.1',
-    port: Number(env.PORT ?? 3000),
+    port,
     databasePath,
     appOrigin,
     masterKey,
     auth,
     ...(fake ? { nacionalUrls: { sefin: `${fake}/SefinNacional`, adn: `${fake}/adn` } } : {}),
   };
+}
+
+function originOf(value: string): string | null {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
 }

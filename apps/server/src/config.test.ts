@@ -79,3 +79,25 @@ test('lists every problem at once', () => {
     ]),
   );
 });
+
+test('APP_ORIGIN must be a bare origin, so the Origin check can match the browser', () => {
+  expect(problemsOf({ ...base, APP_ORIGIN: 'https://nfse.example.com/' })).toContain(
+    'APP_ORIGIN must be an origin such as https://nfse.example.com, with no path or trailing slash',
+  );
+  expect(problemsOf({ ...base, APP_ORIGIN: 'not a url' })).toContain(
+    'APP_ORIGIN must be an origin such as https://nfse.example.com, with no path or trailing slash',
+  );
+});
+
+test('CF_ACCESS_TEAM_DOMAIN must be a bare host name', () => {
+  expect(
+    problemsOf({ ...base, CF_ACCESS_TEAM_DOMAIN: 'https://example.cloudflareaccess.com' }),
+  ).toContain('CF_ACCESS_TEAM_DOMAIN must be a host name such as team.cloudflareaccess.com');
+});
+
+test('PORT must be a whole number from 1 to 65535', () => {
+  expect(problemsOf({ ...base, PORT: 'abc' })).toContain(
+    'PORT must be a whole number from 1 to 65535',
+  );
+  expect(loadConfig({ ...base, PORT: '8080' }).port).toBe(8080);
+});
