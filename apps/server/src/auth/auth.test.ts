@@ -45,6 +45,7 @@ test('GET /api/me returns the user and accounts, with the email matched in any c
   });
   expect(response.statusCode).toBe(200);
   expect(response.json()).toEqual({
+    userId: a.userId,
     email: 'lincoln@example.com',
     name: 'lincoln',
     platformRole: 'user',

@@ -37,6 +37,7 @@ export const api = {
 export type Environment = 'producao' | 'producao_restrita';
 
 export interface Me {
+  userId: string;
   email: string;
   name: string;
   platformRole: 'admin' | 'user';

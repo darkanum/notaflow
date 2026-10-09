@@ -27,7 +27,12 @@ export function HomePage() {
           <a href={routeHref({ name: 'admin' })}>Painel do administrador</a>
         </p>
       )}
-      {data.accounts.length === 0 && <p>Você ainda não participa de nenhuma conta.</p>}
+      {data.accounts.length === 0 && (
+        <p>
+          Você ainda não participa de nenhuma conta. Seu id de usuário é <code>{data.userId}</code>;
+          envie-o ao administrador.
+        </p>
+      )}
       <ul className="list">
         {data.accounts.map((account) => (
           <li key={account.id} className="card">
