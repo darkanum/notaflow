@@ -171,6 +171,104 @@ export function emitterRoutes(
       });
     },
   );
+
+  app.post<{
+    Params: { accountId: string; emitterId: string };
+    Body: { pfxBase64: string; password: string };
+  }>(
+    '/api/accounts/:accountId/emitters/:emitterId/certificate',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['pfxBase64', 'password'],
+          additionalProperties: false,
+          properties: {
+            pfxBase64: { type: 'string', minLength: 1, maxLength: 200_000 },
+            password: { type: 'string', maxLength: 200 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const ctx = accountContext(request, request.params.accountId, { owner: true, write: true });
+      const emitter = emitters.get(ctx, request.params.emitterId);
+      if (!emitter) throw new HttpError(404, 'not_found');
+      const { pfx, material } = openPfx(request.body.pfxBase64, request.body.password);
+      if (material.cnpj !== emitter.cnpj) throw new HttpError(400, 'cnpj_mismatch');
+      try {
+        await deps
+          .providerFactory({ environment: emitter.environment, certificate: material })
+          .checkConnection(emitter.municipality);
+      } catch (error) {
+        throw new HttpError(
+          502,
+          'connection_test_failed',
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+      certificates.addActive(
+        ctx,
+        emitter.id,
+        sealCertificate(pfx, request.body.password, deps.masterKey),
+        {
+          cnpj: material.cnpj,
+          subject: material.subject,
+          validFrom: material.notBefore,
+          validTo: material.notAfter,
+          fingerprintSha256: material.fingerprintSha256,
+          uploadedBy: ctx.userId,
+        },
+      );
+      audit.record({
+        userEmail: identityOf(request).email,
+        accountId: ctx.accountId,
+        action: 'certificate.upload',
+        entity: emitter.id,
+        result: 'ok',
+      });
+      return reply.status(204).send();
+    },
+  );
+
+  app.post<{
+    Params: { accountId: string; emitterId: string };
+    Body: { environment: 'producao' | 'producao_restrita'; confirm?: string };
+  }>(
+    '/api/accounts/:accountId/emitters/:emitterId/environment',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['environment'],
+          additionalProperties: false,
+          properties: {
+            environment: { enum: ['producao', 'producao_restrita'] },
+            confirm: { type: 'string', maxLength: 50 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const ctx = accountContext(request, request.params.accountId, { owner: true, write: true });
+      const { environment, confirm } = request.body;
+      if (environment === 'producao' && confirm !== 'producao') {
+        throw new HttpError(400, 'confirmation_required');
+      }
+      if (!emitters.setEnvironment(ctx, request.params.emitterId, environment)) {
+        throw new HttpError(404, 'not_found');
+      }
+      audit.record({
+        userEmail: identityOf(request).email,
+        accountId: ctx.accountId,
+        action: 'emitter.environment',
+        entity: request.params.emitterId,
+        result: 'ok',
+        detail: environment,
+      });
+      return reply.status(204).send();
+    },
+  );
 }
 
 // The e-CNPJ CN is "COMPANY NAME:CNPJ"; the name is the part before the last colon.

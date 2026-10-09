@@ -1,7 +1,9 @@
 import { makeTestCertificate } from '@notaflow/test-kit';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import { seedTenant } from '../../test/fixtures';
 import { createTestApp, type TestApp } from '../../test/testApp';
+import { accounts } from '../db/schema';
 import { AuditLog } from '../repos/AuditLog';
 import { CertificateRepository } from '../repos/CertificateRepository';
 
@@ -131,4 +133,92 @@ test('a certificate that expires in less than 30 days is flagged', async () => {
 test('a member cannot onboard: 403 owner_only', async () => {
   const a = seedTenant(t.db, { accountName: 'A', email: 'm@example.com', role: 'member' });
   expect((await onboard(a.accountId, 'm@example.com')).statusCode).toBe(403);
+});
+
+async function onboarded(email = 'owner@example.com') {
+  const a = seedTenant(t.db, { accountName: 'A', email });
+  const response = await onboard(a.accountId, email);
+  return { a, emitterId: response.json<{ id: string }>().id };
+}
+
+test('the owner replaces the certificate with one of the same CNPJ', async () => {
+  const { a, emitterId } = await onboarded();
+  const next = makeTestCertificate({ cnpj: '12345678000195' });
+  const before = new CertificateRepository(t.db).activeFor(a, emitterId)?.id;
+  const response = await t.app.inject({
+    method: 'POST',
+    url: `/api/accounts/${a.accountId}/emitters/${emitterId}/certificate`,
+    headers: await t.as('owner@example.com'),
+    payload: { pfxBase64: next.pfx.toString('base64'), password: next.password },
+  });
+  expect(response.statusCode).toBe(204);
+  expect(new CertificateRepository(t.db).activeFor(a, emitterId)?.id).not.toBe(before);
+  expect(new AuditLog(t.db).list().at(-1)).toMatchObject({ action: 'certificate.upload' });
+});
+
+test('a certificate of another CNPJ is 400 cnpj_mismatch', async () => {
+  const { a, emitterId } = await onboarded();
+  const other = makeTestCertificate({ cnpj: '98765432000110' });
+  const response = await t.app.inject({
+    method: 'POST',
+    url: `/api/accounts/${a.accountId}/emitters/${emitterId}/certificate`,
+    headers: await t.as('owner@example.com'),
+    payload: { pfxBase64: other.pfx.toString('base64'), password: other.password },
+  });
+  expect(response.statusCode).toBe(400);
+  expect(response.json()).toEqual({ error: 'cnpj_mismatch' });
+});
+
+test('switching to producao needs the literal confirmation and is audited', async () => {
+  const { a, emitterId } = await onboarded();
+  const url = `/api/accounts/${a.accountId}/emitters/${emitterId}/environment`;
+  const headers = await t.as('owner@example.com');
+  const missing = await t.app.inject({
+    method: 'POST',
+    url,
+    headers,
+    payload: { environment: 'producao', confirm: 'yes' },
+  });
+  expect(missing.statusCode).toBe(400);
+  expect(missing.json()).toEqual({ error: 'confirmation_required' });
+
+  const ok = await t.app.inject({
+    method: 'POST',
+    url,
+    headers,
+    payload: { environment: 'producao', confirm: 'producao' },
+  });
+  expect(ok.statusCode).toBe(204);
+  expect((await listEmitters(a.accountId, 'owner@example.com')).json()).toEqual([
+    expect.objectContaining({ environment: 'producao' }),
+  ]);
+  expect(new AuditLog(t.db).list().at(-1)).toMatchObject({
+    action: 'emitter.environment',
+    detail: 'producao',
+  });
+});
+
+test('a suspended account cannot switch the environment', async () => {
+  const { a, emitterId } = await onboarded();
+  t.db.update(accounts).set({ status: 'suspended' }).where(eq(accounts.id, a.accountId)).run();
+  const response = await t.app.inject({
+    method: 'POST',
+    url: `/api/accounts/${a.accountId}/emitters/${emitterId}/environment`,
+    headers: await t.as('owner@example.com'),
+    payload: { environment: 'producao', confirm: 'producao' },
+  });
+  expect(response.statusCode).toBe(403);
+  expect(response.json()).toEqual({ error: 'account_suspended' });
+});
+
+test('an emitter of another account is 404 on the environment route', async () => {
+  const { emitterId } = await onboarded();
+  const b = seedTenant(t.db, { accountName: 'B', email: 'b@example.com' });
+  const response = await t.app.inject({
+    method: 'POST',
+    url: `/api/accounts/${b.accountId}/emitters/${emitterId}/environment`,
+    headers: await t.as('b@example.com'),
+    payload: { environment: 'producao', confirm: 'producao' },
+  });
+  expect(response.statusCode).toBe(404);
 });
