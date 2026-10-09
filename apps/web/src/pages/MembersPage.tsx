@@ -2,6 +2,17 @@ import { type FormEvent, useState } from 'react';
 import { api, type Member } from '../api';
 import { Layout, errorText } from '../components/Layout';
 import { useAsync } from '../components/useAsync';
+import {
+  Alert,
+  Badge,
+  Button,
+  CARD_CLASSES,
+  Card,
+  Field,
+  FORM_CLASSES,
+  Input,
+  SECTION_TITLE_CLASSES,
+} from '../ui';
 
 export function MembersPage({ accountId }: { accountId: string }) {
   const url = `/api/accounts/${encodeURIComponent(accountId)}/members`;
@@ -24,27 +35,35 @@ export function MembersPage({ accountId }: { accountId: string }) {
   }
 
   return (
-    <Layout title="Membros">
-      {members.error && <p className="error">{errorText(members.error)}</p>}
-      <ul className="list">
-        {members.data?.map((member) => (
-          <li key={member.userId}>
-            {member.name} ({member.email}): {member.role === 'owner' ? 'dono' : 'membro'}
-          </li>
-        ))}
-      </ul>
-      <form onSubmit={invite} className="card">
-        <h2>Convidar membro</h2>
-        <label>
-          E-mail
-          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-        </label>
-        <label>
-          Nome
-          <input required value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <button type="submit">Convidar</button>
-        {message && <p className="message">{message}</p>}
+    <Layout title="Membros" accountId={accountId}>
+      {members.error && <Alert variant="error">{errorText(members.error)}</Alert>}
+      {members.data && (
+        <Card>
+          <ul className="flex flex-col gap-2">
+            {members.data.map((member) => (
+              <li key={member.userId} className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-medium text-fg">{member.name}</span>
+                <span className="text-muted">{member.email}</span>
+                <Badge>{member.role === 'owner' ? 'dono' : 'membro'}</Badge>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+      <form onSubmit={invite} className={`${CARD_CLASSES} ${FORM_CLASSES}`}>
+        <h2 className={SECTION_TITLE_CLASSES}>Convidar membro</h2>
+        <Field label="E-mail">
+          <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+        </Field>
+        <Field label="Nome">
+          <Input required value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <div>
+          <Button type="submit" variant="primary">
+            Convidar
+          </Button>
+        </div>
+        {message && <Alert variant="info">{message}</Alert>}
       </form>
     </Layout>
   );
