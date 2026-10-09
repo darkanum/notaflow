@@ -31,6 +31,9 @@ export interface IssueInput {
   customerId?: string;
 }
 
+// Sefin refusals that mean the invoice is already cancelled. E0840 is the fake's; the acceptance checks the real one.
+export const ALREADY_CANCELLED_CODES = ['E0840'];
+
 export interface IssueResultView {
   id: string;
   status: 'pending' | 'issued' | 'rejected' | 'unknown' | 'cancelled';
@@ -248,7 +251,7 @@ export class IssueService {
     invoiceId: string,
     reason: '1' | '2' | '9',
     justification: string,
-  ): Promise<{ id: string; status: 'cancelled' }> {
+  ): Promise<{ id: string; status: 'cancelled'; alreadyCancelled?: true }> {
     const invoice = this.invoices.get(ctx, invoiceId);
     if (!invoice) throw new HttpError(404, 'not_found');
     if (invoice.status !== 'issued' || !invoice.accessKey) throw new HttpError(409, 'not_issued');
@@ -275,6 +278,12 @@ export class IssueService {
       const message = error instanceof Error ? error.message : String(error);
       audit('error', message);
       throw new HttpError(502, 'sefin_unavailable', message);
+    }
+    if (outcome.kind === 'rejected' && ALREADY_CANCELLED_CODES.includes(outcome.error.code)) {
+      // The first cancel reached the Sefin, even if its answer did not reach us.
+      this.invoices.markCancelled(ctx, invoiceId);
+      audit('ok', 'already cancelled at the Sefin');
+      return { id: invoiceId, status: 'cancelled', alreadyCancelled: true };
     }
     if (outcome.kind === 'rejected') {
       audit('refused', `${outcome.error.code} ${outcome.error.message}`);

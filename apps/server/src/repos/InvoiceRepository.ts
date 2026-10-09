@@ -208,7 +208,11 @@ export class InvoiceRepository {
 
   get(ctx: AccountContext, invoiceId: string) {
     const row = this.db
-      .select(summary)
+      .select({
+        ...summary,
+        sefinMessages: invoices.sefinMessages,
+        templateOf: invoices.templateOf,
+      })
       .from(invoices)
       .innerJoin(emitters, eq(emitters.id, invoices.emitterId))
       .where(and(eq(invoices.id, invoiceId), eq(emitters.accountId, ctx.accountId)))
