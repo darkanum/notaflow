@@ -15,7 +15,8 @@
     "typecheck:root": "tsc -p tsconfig.json",
     "spike:sefin": "tsx --env-file=.env.local spikes/2026-10-sefin/run.ts",
     "spike:sefin:cancel": "tsx --env-file=.env.local spikes/2026-10-sefin/cancel.ts",
-    "fake:nacional": "tsx packages/fake-nacional/src/cli.ts"
+    "fake:nacional": "tsx packages/fake-nacional/src/cli.ts",
+    "spike:adn-read": "tsx --env-file=.env.local spikes/2026-10-adn-read/run.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
