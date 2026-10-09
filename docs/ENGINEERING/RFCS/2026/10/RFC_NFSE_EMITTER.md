@@ -353,6 +353,15 @@ Surprises, all handled in `NacionalClient` or recorded here:
 - A cancellation request for an invoice that is already cancelled got a rejection whose body is not in the `erro` shape the client reads. Capture the raw body before Stage 1a maps event errors.
 - The ADN returned no documents for the emitter right after the issues. Find out in Stage 1a whether the ADN distribution has a delay or whether NSU 0 needs another query.
 
+### Production ADN read (Stage 1a-1, 2026-10-09)
+
+A read-only run of `pnpm spike:adn-read` against the production ADN, with the emitter's certificate. It only read the feed and looked up one invoice by access key.
+
+- Documents read: 6, all `TipoDocumento` `NFSE`. 3 are the emitter's own invoices, and the parser read all 3 with no error. 3 are invoices where the emitter is the customer, skipped as `received invoice`. No event.
+- `/DFe/{NSU}` is exclusive of `NSU`: from NSU 0 the first document had NSU 1, and from the last NSU (6) the ADN returned no document.
+- The production ADN returns the emitter's invoices, unlike produção restrita in Stage 0. The empty feed there remains open.
+- `getInvoice` by access key returned the invoice.
+
 ## Open Questions
 
 - [ ] Can a rejected DPS number be reused, or is it consumed? The spike did not answer it: its invalid DPS (zero amount) was issued. Stage 1a repeats the test with a DPS that the Sefin rejects for a validation error.
