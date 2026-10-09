@@ -18,6 +18,7 @@ import { memberRoutes } from './routes/members';
 import { syncRoutes } from './routes/sync';
 import { SyncService } from './sync/SyncService';
 import { VaultCertificateStore } from './vault/VaultCertificateStore';
+import { registerWeb } from './web';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -34,6 +35,7 @@ export interface AppDeps {
   providerFactory?: ProviderFactory;
   syncService?: SyncService;
   onEmitterCreated?: (ctx: AccountContext, emitterId: string) => void;
+  webRoot?: string;
 }
 
 export function buildApp(deps: AppDeps): FastifyInstance {
@@ -84,5 +86,6 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   invoiceRoutes(app, { db, masterKey: config.masterKey, providerFactory });
   customerRoutes(app, db);
   auditRoutes(app, db);
+  if (deps.webRoot) registerWeb(app, deps.webRoot);
   return app;
 }
