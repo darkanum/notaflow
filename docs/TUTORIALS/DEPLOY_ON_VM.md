@@ -1,0 +1,71 @@
+# Deploy on the Vapulab VPS
+
+NotaFlow runs at `https://notaflow.vapulab.com` on the Vapulab VPS at Hostinger (`ssh vapulab`, Ubuntu 24.04, Docker). A merge to `production` deploys it: CI passes, the `Deploy` workflow builds the image, pushes it to GHCR, and starts it on the VPS over SSH. This page is how to run, check, roll back, and restore it.
+
+## Layout on the VPS
+
+| Path | What |
+| --- | --- |
+| `/opt/notaflow/compose.yaml` | Copied by the workflow from `deploy/compose.yaml` |
+| `/opt/notaflow/.env` | Secrets and settings, mode 600 (see `deploy/.env.example`). `IMAGE=` is written by the workflow |
+| Docker volume `notaflow_data` | `/data` in the container: `notaflow.db` and `backups/` |
+| `/opt/northub/cloudflared/config.yml` | The tunnel ingress, shared with northub and Vapulab. NotaFlow is `notaflow.vapulab.com → http://notaflow:3000` |
+| `/etc/systemd/system/notaflow-backup.{service,timer}` | Daily backup at 03:00 (America/Sao_Paulo) |
+
+The app publishes no host port. The northub tunnel reaches it on the Docker network `northub_default`, with the alias `notaflow`. The DNS record `notaflow.vapulab.com` is a proxied CNAME to the tunnel.
+
+## Secrets
+
+| Secret | Where | Note |
+| --- | --- | --- |
+| `NFSE_MASTER_KEY` | `/opt/notaflow/.env` | Generated on the VPS. Keep a copy in the password manager, never next to a backup. Without it, stored certificates cannot be opened: users upload the `.pfx` again |
+| `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` | `/opt/notaflow/.env` | From the Cloudflare Access application of `notaflow.vapulab.com` |
+| `VM_SSH_KEY`, `VM_KNOWN_HOSTS`, `VM_HOST` | GitHub secrets of `darkanum/notaflow` | The deploy key (`notaflow-deploy` in `/root/.ssh/authorized_keys`) |
+
+To see the master key for the password manager: `ssh vapulab "grep NFSE_MASTER_KEY /opt/notaflow/.env"` in your own terminal.
+
+## Everyday commands
+
+Run them on the VPS, in `/opt/notaflow`:
+
+```bash
+docker compose ps
+docker compose logs --tail 100 app
+docker compose restart app
+```
+
+Create or promote a platform admin:
+
+```bash
+docker compose exec app node --import tsx apps/server/src/seed.ts <email> "<name>"
+```
+
+## Roll back
+
+Every image is tagged with its commit. Put the older tag in `.env` and start it:
+
+```bash
+sed -i '/^IMAGE=/d' .env && echo IMAGE=ghcr.io/darkanum/notaflow:<older sha> >> .env
+docker compose up -d
+```
+
+A migration that already ran stays in the database; an older image works only if the schema change was additive (every migration so far is).
+
+## Backups and restore
+
+`notaflow-backup.timer` runs `backup.ts` in the container every day at 03:00. It writes a consistent copy (SQLite online backup) to `/data/backups/notaflow-<UTC time>.db` and keeps the newest 14. Run one now with `systemctl start notaflow-backup.service`.
+
+Restore:
+
+```bash
+cd /opt/notaflow
+docker compose stop app
+docker run --rm -v notaflow_data:/data alpine sh -c 'cp /data/backups/<file>.db /data/notaflow.db && rm -f /data/notaflow.db-wal /data/notaflow.db-shm'
+docker compose start app
+```
+
+The backups live on the same disk as the database. After a VPS loss, the ADN is the backup for invoices: deploy again, onboard the emitter with its `.pfx`, and sync. What exists only in the database (accounts, users, manual customer data, the audit log, DPS numbering) needs a backup copied off the VPS; that is planned after Stage 1.
+
+## The tunnel
+
+The tunnel is shared. Before an edit, copy `config.yml` with a date suffix; after `docker compose restart tunnel` in `/opt/northub`, check that `https://vapulab.com`, `https://northub.tech`, and `https://notaflow.vapulab.com/api/health` still answer.
