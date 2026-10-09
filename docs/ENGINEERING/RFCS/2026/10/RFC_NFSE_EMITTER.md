@@ -283,6 +283,7 @@ A `suspended` account can log in and read, but cannot issue or cancel. This is t
 - **Provider:** synthetic XML fixtures. A round-trip test (XML to draft to DPS) that loses no field. The generated DPS validates against the official XSD schemas, which are public and live in the repository.
 - **Signer:** each implementation signs, and an independent verifier checks the signature. The two implementations verify each other.
 - **Server:** the route sweep for authentication and isolation. Integration tests against a mocked Sefin: rejection, timeout to `unknown` to reconciliation, and 429 during sync.
+- **Local fake (`packages/fake-nacional`):** an in-memory Sefin and ADN for development and for server integration tests. It copies behavior seen from the real system, such as E0014, E1229, and the JSON 404. It does not check signatures.
 - **End to end in produção restrita:** runs locally only, with a real certificate. Never in CI.
 - **CI (GitHub Actions):** lint, typecheck, tests, `gitleaks`.
 
@@ -299,7 +300,9 @@ docs/ENGINEERING/
   ARCHITECTURE/                   OVERVIEW, TENANCY, PROVIDERS, CERTIFICATE_VAULT, INVOICE_LIFECYCLE
   CONVENTIONS/                    DOCUMENTATION_STANDARD, WRITING_STYLE, SECRETS, CODE_COMMENTS
   RFCS/2026/10/RFC_NFSE_EMITTER.md
-  PLANS/2026/10/PLAN_STAGE_1.md
+  PLANS/2026/10/PLAN_STAGE_1A_1_PROVIDER_READ.md
+  PLANS/2026/10/PLAN_STAGE_1A_2_SERVER_FOUNDATION.md
+  PLANS/2026/10/PLAN_STAGE_1A_3_SYNC_AND_UI.md
 docs/TUTORIALS/                   DEPLOY_ON_VM, MIGRATE_DNS_TO_CLOUDFLARE, ONBOARD_ACCOUNT
 docs/TEMPLATES/                   RFC, PLAN, TUTORIAL
 ```
@@ -349,6 +352,15 @@ Surprises, all handled in `NacionalClient` or recorded here:
 - The Sefin issued a DPS with a zero service amount. The app must refuse a zero amount itself.
 - A cancellation request for an invoice that is already cancelled got a rejection whose body is not in the `erro` shape the client reads. Capture the raw body before Stage 1a maps event errors.
 - The ADN returned no documents for the emitter right after the issues. Find out in Stage 1a whether the ADN distribution has a delay or whether NSU 0 needs another query.
+
+### Production ADN read (Stage 1a-1, 2026-10-09)
+
+A read-only run of `pnpm spike:adn-read` against the production ADN, with the emitter's certificate. It only read the feed and looked up one invoice by access key.
+
+- Documents read: 6, all `TipoDocumento` `NFSE`. 3 are the emitter's own invoices, and the parser read all 3 with no error. 3 are invoices where the emitter is the customer, skipped as `received invoice`. No event.
+- `/DFe/{NSU}` is exclusive of `NSU`: from NSU 0 the first document had NSU 1, and from the last NSU (6) the ADN returned no document.
+- The production ADN returns the emitter's invoices, unlike produção restrita in Stage 0. The empty feed there remains open.
+- `getInvoice` by access key returned the invoice.
 
 ## Open Questions
 

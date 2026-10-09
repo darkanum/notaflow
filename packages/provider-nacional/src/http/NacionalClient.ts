@@ -99,8 +99,14 @@ export class NacionalClient {
   private readonly dispatcher: Dispatcher;
   private readonly timeoutMs: number;
 
-  constructor(options: { environment: Environment; dispatcher: Dispatcher; timeoutMs?: number }) {
-    this.urls = ENDPOINTS[options.environment];
+  constructor(options: {
+    environment: Environment;
+    dispatcher: Dispatcher;
+    timeoutMs?: number;
+    // Points the client at the local fake (packages/fake-nacional) instead of gov.br.
+    urls?: { sefin: string; adn: string };
+  }) {
+    this.urls = options.urls ?? ENDPOINTS[options.environment];
     this.dispatcher = options.dispatcher;
     this.timeoutMs = options.timeoutMs ?? 30_000;
   }
@@ -200,7 +206,7 @@ export class NacionalClient {
           accessKey: item.ChaveAcesso,
           type: item.TipoDocumento,
           ...(item.TipoEvento ? { eventType: item.TipoEvento } : {}),
-          xml: gunzipBase64(item.ArquivoXml),
+          xml: tryGunzip(item.ArquivoXml) ?? '',
           createdAt: item.DataHoraGeracao,
         })),
         errors: data.Erros ?? [],

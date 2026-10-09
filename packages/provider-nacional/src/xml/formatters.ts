@@ -14,3 +14,10 @@ export function formatBrasiliaDateTime(date: Date): string {
 export function formatBrasiliaDate(date: Date): string {
   return formatBrasiliaDateTime(date).slice(0, 10);
 }
+
+export function decimalToCents(value: string): number {
+  const match = /^([0-9]+)(?:\.([0-9]{1,2}))?$/.exec(value);
+  if (!match) throw new RangeError(`Invalid decimal amount: ${value}`);
+  const [, units = '0', fraction = ''] = match;
+  return Number(units) * 100 + Number(fraction.padEnd(2, '0'));
+}

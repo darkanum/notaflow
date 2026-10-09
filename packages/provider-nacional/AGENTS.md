@@ -4,7 +4,8 @@ The national NFS-e system (Sefin Nacional and ADN): builds the DPS and the event
 
 ## Quick Reference
 
-- Entry points: `buildDpsXml`, `buildCancelEventXml`, `NacionalClient`, `createMtlsDispatcher` (`src/index.ts`)
+- Entry points: `NacionalProvider` (the `InvoiceProvider`), `parseNfseXml`, `parseEventXml`, `buildDpsXml`, `buildCancelEventXml`, `NacionalClient`, `createMtlsDispatcher` (`src/index.ts`)
+- Local fake for development and tests: `packages/fake-nacional` (pass its `urls` to `NacionalClient`)
 - Schemas: `schemas/` (official XSD, see `schemas/SOURCE.md`)
 - Depends on: `@notaflow/core`, `undici`. Tests need Python with `lxml` (`tools/xsd/requirements.txt`).
 

@@ -1,4 +1,6 @@
-export type Environment = 'producao' | 'producao_restrita';
+import type { Environment } from '@notaflow/core';
+
+export type { Environment };
 
 export interface Address {
   municipality: string; // IBGE, 7 digits
