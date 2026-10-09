@@ -195,6 +195,57 @@ export class IssueService {
     return this.record(ctx, actor, 'invoice.reconcile', invoiceId, emitter.id, outcome, state);
   }
 
+  async cancel(
+    ctx: AccountContext,
+    actor: string,
+    invoiceId: string,
+    reason: '1' | '2' | '9',
+    justification: string,
+  ): Promise<{ id: string; status: 'cancelled' }> {
+    const invoice = this.invoices.get(ctx, invoiceId);
+    if (!invoice) throw new HttpError(404, 'not_found');
+    if (invoice.status !== 'issued' || !invoice.accessKey) throw new HttpError(409, 'not_issued');
+    const text = justification.trim();
+    if (text.length < 15 || text.length > 255) throw new HttpError(400, 'invalid_justification');
+    const certificate = await this.deps.certificates.loadActive(ctx, invoice.emitterId);
+    if (!certificate) throw new HttpError(409, 'no_active_certificate');
+    // The invoice's own environment, even when the emitter has switched since.
+    const issuer = this.deps.issuerFactory({ environment: invoice.environment, certificate });
+    const audit = (result: 'ok' | 'refused' | 'error', detail: string) =>
+      this.audit.record({
+        userEmail: actor,
+        accountId: ctx.accountId,
+        action: 'invoice.cancel',
+        entity: invoiceId,
+        result,
+        detail,
+      });
+
+    let outcome: Awaited<ReturnType<InvoiceIssuer['cancel']>>;
+    try {
+      outcome = await issuer.cancel(invoice.accessKey, reason, text);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      audit('error', message);
+      throw new HttpError(502, 'sefin_unavailable', message);
+    }
+    if (outcome.kind === 'rejected') {
+      audit('refused', `${outcome.error.code} ${outcome.error.message}`);
+      throw new HttpError(422, 'sefin_rejected', undefined, {
+        code: outcome.error.code,
+        message: outcome.error.message,
+      });
+    }
+    const { event } = outcome;
+    this.deps.db.transaction(() => {
+      if (event) this.invoices.recordEvent(ctx, invoice.emitterId, event);
+      // The event exists once the Sefin registered it, even when its XML was unreadable.
+      this.invoices.markCancelled(ctx, invoiceId);
+    });
+    audit('ok', `reason ${reason}`);
+    return { id: invoiceId, status: 'cancelled' };
+  }
+
   private async send(
     issuer: InvoiceIssuer,
     request: Parameters<InvoiceIssuer['issue']>[0],

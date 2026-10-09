@@ -277,6 +277,15 @@ export class InvoiceRepository {
       .run();
   }
 
+  markCancelled(ctx: AccountContext, invoiceId: string): void {
+    this.requireInvoice(ctx, invoiceId);
+    this.db
+      .update(invoices)
+      .set({ status: 'cancelled', updatedAt: new Date() })
+      .where(eq(invoices.id, invoiceId))
+      .run();
+  }
+
   issueState(ctx: AccountContext, invoiceId: string) {
     return (
       this.db

@@ -35,6 +35,18 @@ const rateSchema = {
   },
 } as const;
 
+const cancelSchema = {
+  body: {
+    type: 'object',
+    required: ['reason', 'justification'],
+    additionalProperties: false,
+    properties: {
+      reason: { enum: ['1', '2', '9'] },
+      justification: { type: 'string', minLength: 15, maxLength: 255 },
+    },
+  },
+} as const;
+
 export function issueRoutes(
   app: FastifyInstance,
   deps: { issue: IssueService; ptaxDispatcher?: Dispatcher },
@@ -75,6 +87,25 @@ export function issueRoutes(
       const ctx = accountContext(request, request.params.accountId, { write: true });
       const result = await deps.issue.issue(ctx, identityOf(request).email, request.body);
       return reply.status(201).send(result);
+    },
+  );
+
+  app.post<{
+    Params: { accountId: string; invoiceId: string };
+    Body: { reason: '1' | '2' | '9'; justification: string };
+  }>(
+    '/api/accounts/:accountId/invoices/:invoiceId/cancel',
+    { schema: cancelSchema },
+    async (request) => {
+      const ctx = accountContext(request, request.params.accountId, { write: true });
+      const { reason, justification } = request.body;
+      return deps.issue.cancel(
+        ctx,
+        identityOf(request).email,
+        request.params.invoiceId,
+        reason,
+        justification,
+      );
     },
   );
 
