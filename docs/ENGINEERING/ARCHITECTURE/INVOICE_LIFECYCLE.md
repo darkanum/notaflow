@@ -26,6 +26,10 @@ A synced invoice starts as `issued` or `cancelled`. Only an invoice issued by th
    - Rejected: the row keeps the Sefin codes and messages. This is a normal answer (201 with `status: 'rejected'`), because the row exists.
    - Uncertain (timeout, 5xx, network): the row becomes `unknown`.
 
+## Idempotency
+
+The issue form sends an `Idempotency-Key` header, one per review. The key is stored on the pending row, unique per emitter. A repeat with the same key answers `200` with the first row's current state and reserves nothing, also when two requests arrive at the same time. Without the header, every call is a new issue.
+
 ## E0014
 
 E0014 means "an NFS-e already exists for this DPS". The issuer then looks the invoice up by DPS id and returns it. The service accepts it only when its competence, amount, description, and customer document match the pending row (`isOwnInvoice`). Otherwise another system used that DPS number, and the row becomes `rejected` with E0014, so the user issues again with the next number.
@@ -43,6 +47,8 @@ The app never resends blindly. The ADN sync can also complete an `unknown` row: 
 ## Cancel
 
 `POST /api/accounts/:accountId/invoices/:invoiceId/cancel` with the reason (1, 2, or 9) and a justification of 15 to 255 characters after trimming. The event goes to the Sefin in the invoice's own environment. A registered event is stored and the invoice becomes `cancelled`, also when the event XML is unreadable. A Sefin refusal is 422 `sefin_rejected` with its code and message; the invoice stays `issued`.
+
+A cancel that the Sefin refuses because the invoice is already cancelled (codes in `ALREADY_CANCELLED_CODES`) marks the row `cancelled` and answers `alreadyCancelled: true`. That happens when the first cancel reached the Sefin but its answer did not reach the app.
 
 ## Export amount (PTAX)
 

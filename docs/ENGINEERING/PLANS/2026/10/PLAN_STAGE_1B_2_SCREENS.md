@@ -6,7 +6,7 @@
 
 **Architecture:** Malphas is a Go templ library with a Tailwind 3 preset, a `tokens.css` file, and a font. NotaFlow's web app is React, so the plan copies the theme files into `apps/web/src/malphas/` (with a check script against the private `darkanum/vapulab` repo), adds Tailwind with the Malphas preset, and writes thin React components in `apps/web/src/ui/` that repeat the class strings of each Malphas component. Every existing page moves to those components; the new pages are built on them. On the server, `POST /invoices/issue` takes an `Idempotency-Key` header stored on the pending row, and a cancel that the Sefin refuses because the invoice is already cancelled marks the row `cancelled`.
 
-**Tech Stack:** React 19, Vite 7, Tailwind CSS 3.4 with PostCSS and Autoprefixer, Vitest 3 with jsdom and Testing Library, Fastify 5, Drizzle 0.45.
+**Tech Stack:** React 19, Vite 7, Tailwind CSS 3.4 with PostCSS and Autoprefixer, Vitest 5 with jsdom and Testing Library, Fastify 5, Drizzle 0.45.
 
 **Spec:** [RFC: NotaFlow NFS-e Emitter](../../RFCS/2026/10/RFC_NFSE_EMITTER.md), sections "Flow: issue a new invoice", "Flow: cancel", "Invoice status", "Delivery Stages" (1b). [Invoice Lifecycle](../../ARCHITECTURE/INVOICE_LIFECYCLE.md) for the server API built in Stage 1b-1.
 
