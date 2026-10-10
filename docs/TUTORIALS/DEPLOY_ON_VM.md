@@ -70,6 +70,12 @@ docker compose start app
 
 The backups live on the same disk as the database. After a VPS loss, the ADN is the backup for invoices: deploy again, onboard the emitter with its `.pfx`, and sync. What exists only in the database (accounts, users, manual customer data, the audit log, DPS numbering) needs a backup copied off the VPS; that is planned after Stage 1.
 
+## Cloudflare Access
+
+The Access application `NotaFlow` protects `notaflow.vapulab.com` (team `plain-hat-ef9e.cloudflareaccess.com`, login by one-time PIN by email, 24 h sessions). Its policy is the **reusable** policy "NotaFlow users (the app authorizes)", which allows any email: the app then checks the email against its own users. A policy written inline in the application (the legacy, app-scoped kind) denied every login on this account with "That account does not have access"; keep the policy reusable.
+
+The PIN comes from `noreply@notify.cloudflare.com`. A new user logs in once, sees "Você ainda não participa de nenhuma conta" with their user id, and a platform admin links that id to an account.
+
 ## The tunnel
 
 The tunnel is shared. Before an edit, copy `config.yml` with a date suffix; after `docker compose restart tunnel` in `/opt/northub`, check that `https://vapulab.com`, `https://northub.tech`, and `https://notaflow.vapulab.com/api/health` still answer.
