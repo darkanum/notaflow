@@ -88,7 +88,7 @@ test('reconcile looks up and resends in the invoice environment, not the emitter
     },
   });
   const { id } = issued.json<{ id: string }>();
-  new EmitterRepository(t.db).setEnvironment(a, emitterId, 'producao');
+  new EmitterRepository(t.db).setEnvironment(a, emitterId, 'producao_restrita');
   const reconciled = await t.app.inject({
     method: 'POST',
     url: `/api/accounts/${a.accountId}/invoices/${id}/reconcile`,
@@ -101,7 +101,7 @@ test('reconcile looks up and resends in the invoice environment, not the emitter
     url: `/api/accounts/${a.accountId}/invoices/${id}`,
     headers,
   });
-  expect(detail.json()).toMatchObject({ environment: 'producao_restrita' });
+  expect(detail.json()).toMatchObject({ environment: 'producao' });
 });
 
 test('a resend of our own DPS that gets E0014 ends issued through the lookup and the ownership check', async () => {

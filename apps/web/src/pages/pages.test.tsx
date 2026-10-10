@@ -114,7 +114,10 @@ test('a click on the row opens the invoice; the list has no number or environmen
 });
 
 test('the row opens with Enter, and its buttons do not open it', async () => {
-  vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:x', revokeObjectURL: () => {} }));
+  vi.stubGlobal(
+    'URL',
+    Object.assign(URL, { createObjectURL: () => 'blob:x', revokeObjectURL: () => {} }),
+  );
   stubApi({
     '/api/accounts/acc/invoices/inv1/danfse': { error: 'danfse_unavailable' },
     '/api/accounts/acc/invoices': { items: [invoice], total: 1 },
@@ -133,7 +136,10 @@ test('the row opens with Enter, and its buttons do not open it', async () => {
 test('a produção restrita invoice carries a Teste badge; a production one does not', async () => {
   stubApi({
     '/api/accounts/acc/invoices': {
-      items: [invoice, { ...invoice, id: 'inv2', customerName: 'Teste Ltda', environment: 'producao_restrita' }],
+      items: [
+        invoice,
+        { ...invoice, id: 'inv2', customerName: 'Teste Ltda', environment: 'producao_restrita' },
+      ],
       total: 2,
     },
     '/api/accounts/acc/emitters': [],

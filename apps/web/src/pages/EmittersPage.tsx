@@ -16,6 +16,8 @@ export function EmittersPage({ accountId }: { accountId: string }) {
   const emitters = useAsync(() => api.get<Emitter[]>(`${base}/emitters`), [base]);
   const [message, setMessage] = useState<string | null>(null);
   const isOwner = me.data?.accounts.find((a) => a.id === accountId)?.role === 'owner';
+  // Produção restrita is a platform-admin tool; every account works in production.
+  const isAdmin = me.data?.platformRole === 'admin';
 
   const act: Act = async (action) => {
     setMessage(null);
@@ -32,14 +34,21 @@ export function EmittersPage({ accountId }: { accountId: string }) {
       {message && <Alert variant="info">{message}</Alert>}
       {emitters.error && <Alert variant="error">{errorText(emitters.error)}</Alert>}
       {emitters.data?.map((emitter) => (
-        <EmitterCard key={emitter.id} base={base} emitter={emitter} isOwner={isOwner} act={act} />
+        <EmitterCard
+          key={emitter.id}
+          base={base}
+          emitter={emitter}
+          isOwner={isOwner}
+          isAdmin={isAdmin}
+          act={act}
+        />
       ))}
       {isOwner && (
         <OnboardingForm
           onSubmit={(body) =>
             act(async () => {
               await api.post(`${base}/emitters`, body);
-              return 'Emitente cadastrado em produção restrita. A primeira sincronização começou.';
+              return 'Emitente cadastrado. A primeira sincronização começou.';
             })
           }
         />
@@ -48,8 +57,14 @@ export function EmittersPage({ accountId }: { accountId: string }) {
   );
 }
 
-function EmitterCard(props: { base: string; emitter: Emitter; isOwner: boolean; act: Act }) {
-  const { base, emitter, isOwner, act } = props;
+function EmitterCard(props: {
+  base: string;
+  emitter: Emitter;
+  isOwner: boolean;
+  isAdmin: boolean;
+  act: Act;
+}) {
+  const { base, emitter, isOwner, isAdmin, act } = props;
   const url = `${base}/emitters/${encodeURIComponent(emitter.id)}`;
   const sync = useAsync(() => api.get<SyncState>(`${url}/sync`), [url]);
 
@@ -122,15 +137,17 @@ function EmitterCard(props: { base: string; emitter: Emitter; isOwner: boolean; 
                 }}
               />
             </label>
-            <Button
-              variant={emitter.environment === 'producao' ? 'secondary' : 'danger'}
-              onClick={switchEnvironment}
-            >
-              {emitter.environment === 'producao'
-                ? 'Voltar para produção restrita'
-                : 'Passar para PRODUÇÃO'}
-            </Button>
           </>
+        )}
+        {isAdmin && (
+          <Button
+            variant={emitter.environment === 'producao' ? 'secondary' : 'danger'}
+            onClick={switchEnvironment}
+          >
+            {emitter.environment === 'producao'
+              ? 'Voltar para produção restrita'
+              : 'Passar para PRODUÇÃO'}
+          </Button>
         )}
       </div>
     </Card>

@@ -8,7 +8,7 @@ export type EmitterRow = typeof emitters.$inferSelect;
 export type NewEmitter = Omit<
   typeof emitters.$inferInsert,
   'id' | 'accountId' | 'environment' | 'provider' | 'nextDpsNumber' | 'createdAt'
->;
+> & { environment?: Environment };
 
 export class EmitterRepository {
   constructor(private readonly db: Database) {}

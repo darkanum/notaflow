@@ -115,7 +115,7 @@ The spike result is recorded in this RFC.
 2. The app opens the certificate, reads the CNPJ and the company name, and checks the validity dates. It refuses a CNPJ that already belongs to another account.
 3. The user completes what the certificate does not carry: municipal registration, municipality (IBGE code), tax regime, and DPS series.
 4. Connection test: a read-only mTLS call, `GET {adn}/parametrizacao/{cMun}/convenio`. The old Sefin municipal-parameter paths return 501. On success, the certificate becomes active and the first sync starts.
-5. A new emitter always starts in `producao_restrita`. A switch to `producao` needs an explicit confirmation and goes to the audit log. The UI always shows a large badge with the current environment.
+5. A new emitter starts in `producao`, and the connection test runs there (decided by Lincoln on 2026-10-10: customers work in production only). Produção restrita is a test tool of the platform admin: only a platform `admin` who is a member of the account can switch an emitter's environment; a switch to `producao` needs an explicit confirmation, and every switch goes to the audit log. The UI shows a large badge with the environment where it matters (invoice detail, issue review, cancel dialog), and the invoice list marks produção restrita invoices with a "Teste" badge.
 
 ### Flow: sync from the ADN
 
@@ -214,8 +214,8 @@ The main threat: a person who gets into an account can issue and cancel invoices
 
 | Role | Can |
 | --- | --- |
-| `admin` (platform) | Admin panel: create and suspend accounts, add users, set the `owner` of each account. Cannot see invoices or certificates of an account by default. |
-| `owner` (account) | Everything in the account: certificates, emitters, invite `member`s, issue, cancel, customers. |
+| `admin` (platform) | Admin panel: create and suspend accounts, add users, set the `owner` of each account. Cannot see invoices or certificates of an account by default. The only role that switches an emitter between `producao` and `producao_restrita`, in an account where the admin is a member. |
+| `owner` (account) | Everything in the account (always in production): certificates, emitters, invite `member`s, issue, cancel, customers. |
 | `member` (account) | Issue, cancel, manage customers. No access to certificates or users. |
 
 A `suspended` account can log in and read, but cannot issue or cancel. This is the hook for billing.
