@@ -123,9 +123,10 @@ export function emitterRoutes(
       };
       refuseDuplicate();
 
+      // Customers work in production only; produção restrita is a platform-admin tool.
       try {
         await deps
-          .providerFactory({ environment: 'producao_restrita', certificate: material })
+          .providerFactory({ environment: 'producao', certificate: material })
           .checkConnection(fiscal.municipality);
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
@@ -145,6 +146,7 @@ export function emitterRoutes(
         deps.db.transaction(() => {
           const created = emitters.create(ctx, {
             ...fiscal,
+            environment: 'producao',
             cnpj: material.cnpj,
             companyName: companyNameOf(material),
           });
@@ -268,7 +270,9 @@ export function emitterRoutes(
       },
     },
     async (request, reply) => {
-      const ctx = accountContext(request, request.params.accountId, { owner: true, write: true });
+      const ctx = accountContext(request, request.params.accountId, { write: true });
+      // Only the platform admin uses produção restrita; every account works in production.
+      if (identityOf(request).platformRole !== 'admin') throw new HttpError(403, 'admin_only');
       const { environment, confirm } = request.body;
       if (environment === 'producao' && confirm !== 'producao') {
         throw new HttpError(400, 'confirmation_required');

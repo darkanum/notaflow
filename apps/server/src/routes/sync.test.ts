@@ -41,7 +41,7 @@ test('POST sync runs the sync and GET shows the state', async () => {
   expect(run.json()).toMatchObject({ invoices: 2, lastNsu: 2, error: null });
   const state = await t.app.inject({ method: 'GET', url, headers });
   expect(state.json()).toMatchObject({
-    environment: 'producao_restrita',
+    environment: 'producao',
     lastNsu: 2,
     lastError: null,
     running: false,

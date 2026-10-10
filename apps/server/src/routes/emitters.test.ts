@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import { seedTenant } from '../../test/fixtures';
 import { createTestApp, type TestApp } from '../../test/testApp';
-import { accounts } from '../db/schema';
+import { accounts, users } from '../db/schema';
 import { AuditLog } from '../repos/AuditLog';
 import { CertificateRepository } from '../repos/CertificateRepository';
 
@@ -41,7 +41,7 @@ async function listEmitters(accountId: string, email: string) {
   });
 }
 
-test('an owner onboards an emitter: connection test, sealed certificate, producao_restrita', async () => {
+test('an owner onboards an emitter: connection test, sealed certificate, production', async () => {
   const a = seedTenant(t.db, { accountName: 'A', email: 'owner@example.com' });
   const response = await onboard(a.accountId, 'owner@example.com');
   expect(response.statusCode).toBe(201);
@@ -49,7 +49,7 @@ test('an owner onboards an emitter: connection test, sealed certificate, produca
   expect(created).toMatchObject({
     cnpj: '12345678000195',
     companyName: 'EMPRESA TESTE LTDA',
-    environment: 'producao_restrita',
+    environment: 'producao',
   });
 
   const stored = new CertificateRepository(t.db).activeFor(a, created.id);
@@ -64,7 +64,7 @@ test('an owner onboards an emitter: connection test, sealed certificate, produca
     expect.objectContaining({
       id: created.id,
       cnpj: '12345678000195',
-      environment: 'producao_restrita',
+      environment: 'producao',
       certificate: { validTo: expect.any(String), expiresSoon: false },
     }),
   ]);
@@ -193,10 +193,29 @@ test('a certificate of another CNPJ is 400 cnpj_mismatch', async () => {
   expect(response.json()).toEqual({ error: 'cnpj_mismatch' });
 });
 
-test('switching to producao needs the literal confirmation and is audited', async () => {
+test('only a platform admin switches the environment; an owner gets 403 admin_only', async () => {
   const { a, emitterId } = await onboarded();
   const url = `/api/accounts/${a.accountId}/emitters/${emitterId}/environment`;
-  const headers = await t.as('owner@example.com');
+  const response = await t.app.inject({
+    method: 'POST',
+    url,
+    headers: await t.as('owner@example.com'),
+    payload: { environment: 'producao_restrita' },
+  });
+  expect(response.statusCode).toBe(403);
+  expect(response.json()).toEqual({ error: 'admin_only' });
+  expect((await listEmitters(a.accountId, 'owner@example.com')).json()).toEqual([
+    expect.objectContaining({ environment: 'producao' }),
+  ]);
+});
+
+test('a platform admin switches to produção restrita and back with the literal confirmation, audited', async () => {
+  const { a, emitterId } = await onboarded('admin@example.com');
+  t.db.update(users).set({ platformRole: 'admin' }).where(eq(users.email, 'admin@example.com')).run();
+  const url = `/api/accounts/${a.accountId}/emitters/${emitterId}/environment`;
+  const headers = await t.as('admin@example.com');
+  const toTest = await t.app.inject({ method: 'POST', url, headers, payload: { environment: 'producao_restrita' } });
+  expect(toTest.statusCode).toBe(204);
   const missing = await t.app.inject({
     method: 'POST',
     url,
@@ -205,17 +224,13 @@ test('switching to producao needs the literal confirmation and is audited', asyn
   });
   expect(missing.statusCode).toBe(400);
   expect(missing.json()).toEqual({ error: 'confirmation_required' });
-
-  const ok = await t.app.inject({
+  const back = await t.app.inject({
     method: 'POST',
     url,
     headers,
     payload: { environment: 'producao', confirm: 'producao' },
   });
-  expect(ok.statusCode).toBe(204);
-  expect((await listEmitters(a.accountId, 'owner@example.com')).json()).toEqual([
-    expect.objectContaining({ environment: 'producao' }),
-  ]);
+  expect(back.statusCode).toBe(204);
   expect(new AuditLog(t.db).list().at(-1)).toMatchObject({
     action: 'emitter.environment',
     detail: 'producao',
@@ -235,9 +250,10 @@ test('a suspended account cannot switch the environment', async () => {
   expect(response.json()).toEqual({ error: 'account_suspended' });
 });
 
-test('an emitter of another account is 404 on the environment route', async () => {
+test('an emitter of another account is 404 on the environment route, also for a platform admin', async () => {
   const { emitterId } = await onboarded();
   const b = seedTenant(t.db, { accountName: 'B', email: 'b@example.com' });
+  t.db.update(users).set({ platformRole: 'admin' }).where(eq(users.email, 'b@example.com')).run();
   const response = await t.app.inject({
     method: 'POST',
     url: `/api/accounts/${b.accountId}/emitters/${emitterId}/environment`,
