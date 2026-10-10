@@ -63,8 +63,22 @@ jobs:
         with:
           ref: ${{ needs.build.outputs.sha }}
 
+      # Runs wait in one queue, but CI of two quick merges can finish out of order. Only the commit
+      # that is the tip of production goes live; an older one is skipped, and the newer run deploys.
+      - name: Check this is the newest commit on production
+        id: newest
+        run: |
+          tip=$(git ls-remote origin refs/heads/production | cut -f1)
+          if [ "$tip" = "$TAG" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipped: production is at ${tip}, newer than ${TAG}; its own run deploys it."
+          fi
+
       # The VM_* secrets live in the production environment, which only the production branch can use.
       - name: Configure SSH
+        if: steps.newest.outputs.deploy == 'true'
         env:
           VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
           VM_KNOWN_HOSTS: ${{ secrets.VM_KNOWN_HOSTS }}
@@ -83,12 +97,14 @@ jobs:
           EOF
 
       - name: Copy the compose file
+        if: steps.newest.outputs.deploy == 'true'
         run: scp deploy/compose.yaml vm:/opt/notaflow/compose.yaml
 
       # The job token logs in for the pull only, in a Docker config of its own: the VPS also deploys
       # Vapulab, and a shared /root/.docker login would race with it. IMAGE goes into .env only after
       # a good pull, so a manual docker compose on the VPS always uses the running version.
       - name: Start the new version
+        if: steps.newest.outputs.deploy == 'true'
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -100,6 +116,7 @@ jobs:
             && docker compose up -d --remove-orphans && docker image prune -f"
 
       - name: Health check
+        if: steps.newest.outputs.deploy == 'true'
         run: |
           ssh vm 'for i in $(seq 1 45); do
             docker run --rm --network northub_default curlimages/curl:8.10.1 -fsS http://notaflow:3000/api/health && exit 0
