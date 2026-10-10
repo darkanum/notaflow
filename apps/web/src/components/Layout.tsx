@@ -86,6 +86,13 @@ export function Layout(props: { title: string; accountId?: string; children: Rea
               })}
             </ul>
           )}
+          {/* Cloudflare Access serves this path on the app's own domain and ends its session. */}
+          <a
+            href="/cdn-cgi/access/logout"
+            className={`ml-auto text-sm ${linkClasses({ variant: 'muted' })}`}
+          >
+            Sair
+          </a>
         </nav>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-8">

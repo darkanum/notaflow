@@ -50,3 +50,12 @@ test('every error code the server can send has a text', () => {
     expect(ERROR_TEXT[code]).toBeTruthy();
   }
 });
+
+test('the layout has Sair, which ends the Cloudflare Access session', () => {
+  render(
+    <Layout title="Notas">
+      <p>conteúdo</p>
+    </Layout>,
+  );
+  expect(screen.getByRole('link', { name: 'Sair' }).getAttribute('href')).toBe('/cdn-cgi/access/logout');
+});
