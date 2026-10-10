@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ApiError, api, type InvoiceDetail } from '../api';
 import { EnvironmentBadge } from '../components/EnvironmentBadge';
 import { errorText } from '../components/Layout';
+import { showsEnvironment, useMe } from '../components/MeContext';
 import { formatCents } from '../format';
 import { Alert, Button, Field, Modal, Select, Textarea } from '../ui';
 
@@ -25,6 +26,7 @@ export function CancelDialog(props: {
   const [error, setError] = useState<string | null>(null);
   const length = justification.trim().length;
   const production = invoice.environment === 'producao';
+  const namesEnvironment = showsEnvironment(useMe(), invoice.environment);
 
   async function confirm() {
     setBusy(true);
@@ -84,7 +86,11 @@ export function CancelDialog(props: {
             disabled={busy || length < 15 || length > 255}
             onClick={() => void confirm()}
           >
-            {production ? 'Cancelar em PRODUÇÃO' : 'Cancelar em produção restrita'}
+            {!namesEnvironment
+              ? 'Confirmar cancelamento'
+              : production
+                ? 'Cancelar em PRODUÇÃO'
+                : 'Cancelar em produção restrita'}
           </Button>
           <Button variant="secondary" disabled={busy} onClick={props.onClose}>
             Voltar

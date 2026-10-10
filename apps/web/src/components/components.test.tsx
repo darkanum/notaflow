@@ -1,16 +1,17 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, test } from 'vitest';
+import { meFor, renderWithMe } from '../test/renderWithMe';
 import { CertificateWarning } from './CertificateWarning';
 import { EnvironmentBadge } from './EnvironmentBadge';
 import { ERROR_TEXT, Layout } from './Layout';
 
 afterEach(() => cleanup());
 
-test('the environment badge says which environment, loudly', () => {
-  render(<EnvironmentBadge environment="producao" />);
+test('the environment badge says which environment, loudly, to the platform admin', () => {
+  renderWithMe(<EnvironmentBadge environment="producao" />, meFor('admin'));
   expect(screen.getByText('PRODUÇÃO')).toBeTruthy();
-  render(<EnvironmentBadge environment="producao_restrita" />);
+  renderWithMe(<EnvironmentBadge environment="producao_restrita" />, meFor('admin'));
   expect(screen.getByText(/PRODUÇÃO RESTRITA/)).toBeTruthy();
 });
 
@@ -57,5 +58,7 @@ test('the layout has Sair, which ends the Cloudflare Access session', () => {
       <p>conteúdo</p>
     </Layout>,
   );
-  expect(screen.getByRole('link', { name: 'Sair' }).getAttribute('href')).toBe('/cdn-cgi/access/logout');
+  expect(screen.getByRole('link', { name: 'Sair' }).getAttribute('href')).toBe(
+    '/cdn-cgi/access/logout',
+  );
 });

@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, expect, test, vi } from 'vitest';
 import { installDialogPolyfill } from '../test/dialog';
 import { stubApi } from '../test/stubApi';
+import { meFor, renderWithMe } from '../test/renderWithMe';
 import { InvoiceDetailPage } from './InvoiceDetailPage';
 
 beforeAll(() => installDialogPolyfill());
@@ -36,7 +37,7 @@ const issuedInvoice = {
 
 test('an issued invoice links to issue similar', async () => {
   stubApi({ '/api/accounts/acc/invoices/inv1': issuedInvoice });
-  render(<InvoiceDetailPage accountId="acc" invoiceId="inv1" />);
+  renderWithMe(<InvoiceDetailPage accountId="acc" invoiceId="inv1" />, meFor('admin'));
   const link = await screen.findByRole('link', { name: 'Emitir parecida' });
   expect(link.getAttribute('href')).toBe('#/a/acc/invoices/inv1/issue');
 });
@@ -46,7 +47,7 @@ test('cancel in production names the environment and needs a 15-character justif
     '/api/accounts/acc/invoices/inv1/cancel': { id: 'inv1', status: 'cancelled' },
     '/api/accounts/acc/invoices/inv1': { ...issuedInvoice, environment: 'producao' },
   });
-  render(<InvoiceDetailPage accountId="acc" invoiceId="inv1" />);
+  renderWithMe(<InvoiceDetailPage accountId="acc" invoiceId="inv1" />, meFor('admin'));
   const user = userEvent.setup();
   await user.click(await screen.findByRole('button', { name: 'Cancelar nota' }));
   const dialog = screen.getByRole('dialog', { name: /cancelar/i });
@@ -72,7 +73,7 @@ test('a Sefin refusal shows its code and message in the dialog', async () => {
     },
     '/api/accounts/acc/invoices/inv1': issuedInvoice,
   });
-  render(<InvoiceDetailPage accountId="acc" invoiceId="inv1" />);
+  renderWithMe(<InvoiceDetailPage accountId="acc" invoiceId="inv1" />, meFor('admin'));
   const user = userEvent.setup();
   await user.click(await screen.findByRole('button', { name: 'Cancelar nota' }));
   const dialog = screen.getByRole('dialog', { name: /cancelar/i });
@@ -90,7 +91,7 @@ test('an already cancelled answer says so', async () => {
     },
     '/api/accounts/acc/invoices/inv1': issuedInvoice,
   });
-  render(<InvoiceDetailPage accountId="acc" invoiceId="inv1" />);
+  renderWithMe(<InvoiceDetailPage accountId="acc" invoiceId="inv1" />, meFor('admin'));
   const user = userEvent.setup();
   await user.click(await screen.findByRole('button', { name: 'Cancelar nota' }));
   const dialog = screen.getByRole('dialog', { name: /cancelar/i });
@@ -108,7 +109,7 @@ test('an unknown invoice offers Verificar na Sefin and lists the Sefin messages'
       sefinMessages: [{ code: 'uncertain', message: 'timeout' }],
     },
   });
-  render(<InvoiceDetailPage accountId="acc" invoiceId="inv1" />);
+  renderWithMe(<InvoiceDetailPage accountId="acc" invoiceId="inv1" />, meFor('admin'));
   const user = userEvent.setup();
   expect(await screen.findByText(/timeout/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Cancelar nota' })).toBeNull();
@@ -132,8 +133,18 @@ test('the detail downloads the DANFS-e PDF', async () => {
     '/api/accounts/acc/invoices/inv1/danfse': 'PDF',
     '/api/accounts/acc/invoices/inv1': issuedInvoice,
   });
-  render(<InvoiceDetailPage accountId="acc" invoiceId="inv1" />);
+  renderWithMe(<InvoiceDetailPage accountId="acc" invoiceId="inv1" />, meFor('admin'));
   const user = userEvent.setup();
   await user.click(await screen.findByRole('button', { name: /baixar pdf/i }));
   await waitFor(() => expect(created).toHaveLength(1));
+});
+
+test('a customer cancels a production invoice with Cancelar nota, without the environment', async () => {
+  stubApi({ '/api/accounts/acc/invoices/inv1': { ...issuedInvoice, environment: 'producao' } });
+  renderWithMe(<InvoiceDetailPage accountId="acc" invoiceId="inv1" />, meFor('user'));
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: 'Cancelar nota' }));
+  const dialog = screen.getByRole('dialog', { name: /cancelar/i });
+  expect(within(dialog).queryByText('PRODUÇÃO')).toBeNull();
+  expect(within(dialog).getByRole('button', { name: 'Confirmar cancelamento' })).toBeTruthy();
 });

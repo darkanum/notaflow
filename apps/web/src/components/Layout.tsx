@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ApiError } from '../api';
 import { routeHref, useRoute } from '../router';
+import { roleIn, useMe } from './MeContext';
 import { linkClasses } from '../ui';
 
 export const ERROR_TEXT: Record<string, string> = {
@@ -60,7 +61,12 @@ const SECTIONS = [
 // Malphas Navbar and page shell, without Alpine: the links are plain hash routes.
 export function Layout(props: { title: string; accountId?: string; children: ReactNode }) {
   const route = useRoute();
+  const me = useMe();
   const { accountId } = props;
+  // Membros is an owner tool; the server refuses it to anyone else anyway.
+  const sections = SECTIONS.filter(
+    (section) => section.name !== 'members' || (accountId && roleIn(me, accountId) === 'owner'),
+  );
   return (
     <div className="min-h-screen">
       <header className="border-b border-border bg-surface">
@@ -70,7 +76,7 @@ export function Layout(props: { title: string; accountId?: string; children: Rea
           </a>
           {accountId && (
             <ul className="flex flex-wrap items-center gap-x-6 gap-y-2">
-              {SECTIONS.map((section) => {
+              {sections.map((section) => {
                 const current = (section.current as readonly string[]).includes(route.name);
                 return (
                   <li key={section.name}>

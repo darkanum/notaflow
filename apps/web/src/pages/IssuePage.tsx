@@ -10,6 +10,7 @@ import {
 } from '../api';
 import { EnvironmentBadge } from '../components/EnvironmentBadge';
 import { Layout, errorText } from '../components/Layout';
+import { showsEnvironment, useMe } from '../components/MeContext';
 import { useAsync } from '../components/useAsync';
 import {
   brasiliaToday,
@@ -133,6 +134,7 @@ function IssueFlow(props: {
   const chosen = customers.find((c) => c.id === form.customerId);
   const customerName = chosen?.name ?? draft.customer?.name ?? '';
   const production = emitter.environment === 'producao';
+  const namesEnvironment = showsEnvironment(useMe(), emitter.environment);
 
   // The review shows reviewed values; a rate arriving then must not change them.
   const reviewing = useRef(idempotencyKey !== null);
@@ -339,9 +341,11 @@ function IssueFlow(props: {
           >
             {locked
               ? 'Tentar de novo'
-              : production
-                ? 'Emitir em PRODUÇÃO'
-                : 'Emitir em produção restrita'}
+              : !namesEnvironment
+                ? 'Emitir nota'
+                : production
+                  ? 'Emitir em PRODUÇÃO'
+                  : 'Emitir em produção restrita'}
           </Button>
           {!locked && (
             <Button variant="secondary" disabled={busy} onClick={() => setIdempotencyKey(null)}>
