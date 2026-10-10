@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { ERROR_TEXT } from '../components/Layout';
 import { stubApi } from '../test/stubApi';
+import { meFor, renderWithMe } from '../test/renderWithMe';
 import { IssuePage } from './IssuePage';
 
 const KEY = '11111111-1111-4111-8111-111111111111';
@@ -56,7 +57,7 @@ const rate = (date: string, rateE4: number) => ({
 
 test('the PTAX rate is fetched when the form opens and fills the BRL amount', async () => {
   const calls = stubApi({ ...base, '/api/accounts/acc/exchange-rate': rate('2026-08-31', 54321) });
-  render(<IssuePage accountId="acc" invoiceId="inv1" />);
+  renderWithMe(<IssuePage accountId="acc" invoiceId="inv1" />, meFor('admin'));
   expect(await screen.findByDisplayValue('10.864,20')).toBeTruthy();
   expect(screen.getByText(/PTAX venda de 31\/08\/2026: 5,4321/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: /cotação ptax/i })).toBeNull();
@@ -72,7 +73,7 @@ test('a new competence date fetches the rate of that date', async () => {
     '/api/accounts/acc/exchange-rate': rate('2026-08-31', 54321),
     '/api/accounts/acc/exchange-rate?currency=220&date=2026-07-31': rate('2026-07-31', 50000),
   });
-  render(<IssuePage accountId="acc" invoiceId="inv1" />);
+  renderWithMe(<IssuePage accountId="acc" invoiceId="inv1" />, meFor('admin'));
   await screen.findByDisplayValue('10.864,20');
   fireEvent.change(screen.getByLabelText('Competência'), { target: { value: '2026-07-31' } });
   expect(await screen.findByDisplayValue('10.000,00')).toBeTruthy();
@@ -81,7 +82,7 @@ test('a new competence date fetches the rate of that date', async () => {
 
 test('a new foreign amount refreshes the BRL amount, and a typed BRL amount stays until then', async () => {
   stubApi({ ...base, '/api/accounts/acc/exchange-rate': rate('2026-08-31', 54321) });
-  render(<IssuePage accountId="acc" invoiceId="inv1" />);
+  renderWithMe(<IssuePage accountId="acc" invoiceId="inv1" />, meFor('admin'));
   const user = userEvent.setup();
   const brl = (await screen.findByDisplayValue('10.864,20')) as HTMLInputElement;
   await user.clear(brl);
@@ -96,7 +97,7 @@ test('a new foreign amount refreshes the BRL amount, and a typed BRL amount stay
 
 test('a PTAX failure keeps the BRL amount editable and says so', async () => {
   stubApi({ ...base, '/api/accounts/acc/exchange-rate': { error: 'ptax_unavailable' } });
-  render(<IssuePage accountId="acc" invoiceId="inv1" />);
+  renderWithMe(<IssuePage accountId="acc" invoiceId="inv1" />, meFor('admin'));
   expect(await screen.findByText(ERROR_TEXT.ptax_unavailable ?? '')).toBeTruthy();
   const brl = screen.getByLabelText(/valor em reais/i) as HTMLInputElement;
   expect(brl.disabled).toBe(false);
@@ -108,7 +109,7 @@ test('the review shows PRODUÇÃO, highlights changes, and sends one key on a re
     ...base,
     '/api/accounts/acc/invoices/issue': { error: 'sefin_unavailable' },
   });
-  render(<IssuePage accountId="acc" invoiceId="inv1" />);
+  renderWithMe(<IssuePage accountId="acc" invoiceId="inv1" />, meFor('admin'));
   const user = userEvent.setup();
   const description = await screen.findByLabelText(/descrição/i);
   await user.clear(description);
@@ -133,7 +134,7 @@ test('an issued invoice opens its detail', async () => {
     ...base,
     '/api/accounts/acc/invoices/issue': { id: 'new1', status: 'issued', number: '7' },
   });
-  render(<IssuePage accountId="acc" invoiceId="inv1" />);
+  renderWithMe(<IssuePage accountId="acc" invoiceId="inv1" />, meFor('admin'));
   const user = userEvent.setup();
   await user.click(await screen.findByRole('button', { name: /revisar/i }));
   await user.click(screen.getByRole('button', { name: /emitir em produção/i }));
@@ -145,7 +146,7 @@ test('after an uncertain send error the form cannot go back, and a retry keeps t
     ...base,
     '/api/accounts/acc/invoices/issue': { error: 'sefin_unavailable' },
   });
-  render(<IssuePage accountId="acc" invoiceId="inv1" />);
+  renderWithMe(<IssuePage accountId="acc" invoiceId="inv1" />, meFor('admin'));
   const user = userEvent.setup();
   await user.click(await screen.findByRole('button', { name: /revisar/i }));
   await user.click(screen.getByRole('button', { name: /emitir em produção/i }));
@@ -163,13 +164,13 @@ test('after an uncertain send error the form cannot go back, and a retry keeps t
 
 test('a reload after an uncertain send keeps the key and the reviewed values', async () => {
   const calls = stubApi({ ...base, '/api/accounts/acc/invoices/issue': { error: 'http_524' } });
-  const first = render(<IssuePage accountId="acc" invoiceId="inv1" />);
+  const first = renderWithMe(<IssuePage accountId="acc" invoiceId="inv1" />, meFor('admin'));
   const user = userEvent.setup();
   await user.click(await screen.findByRole('button', { name: /revisar/i }));
   await user.click(screen.getByRole('button', { name: /emitir em produção/i }));
   expect(await screen.findByText(/pode ter sido emitida/i)).toBeTruthy();
   first.unmount();
-  render(<IssuePage accountId="acc" invoiceId="inv1" />);
+  renderWithMe(<IssuePage accountId="acc" invoiceId="inv1" />, meFor('admin'));
   await user.click(await screen.findByRole('button', { name: /tentar de novo/i }));
   await waitFor(() =>
     expect(calls.filter((c) => c.url.endsWith('/invoices/issue'))).toHaveLength(2),
@@ -182,9 +183,18 @@ test('a reload after an uncertain send keeps the key and the reviewed values', a
 
 test('a validation refusal is definitive: the user can go back and edit', async () => {
   stubApi({ ...base, '/api/accounts/acc/invoices/issue': { error: 'invalid_amount' } });
-  render(<IssuePage accountId="acc" invoiceId="inv1" />);
+  renderWithMe(<IssuePage accountId="acc" invoiceId="inv1" />, meFor('admin'));
   const user = userEvent.setup();
   await user.click(await screen.findByRole('button', { name: /revisar/i }));
   await user.click(screen.getByRole('button', { name: /emitir em produção/i }));
   expect(await screen.findByRole('button', { name: /voltar e editar/i })).toBeTruthy();
+});
+
+test('a customer reviews without the environment: no PRODUÇÃO, and the button says Emitir nota', async () => {
+  stubApi(base);
+  renderWithMe(<IssuePage accountId="acc" invoiceId="inv1" />, meFor('user'));
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: /revisar/i }));
+  expect(screen.queryByText('PRODUÇÃO')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Emitir nota' })).toBeTruthy();
 });

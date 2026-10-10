@@ -1,3 +1,4 @@
+import { MeProvider } from './components/MeContext';
 import { AdminPage } from './pages/AdminPage';
 import { CustomerPage } from './pages/CustomerPage';
 import { CustomersPage } from './pages/CustomersPage';
@@ -10,6 +11,14 @@ import { MembersPage } from './pages/MembersPage';
 import { useRoute } from './router';
 
 export function App() {
+  return (
+    <MeProvider>
+      <Screen />
+    </MeProvider>
+  );
+}
+
+function Screen() {
   const route = useRoute();
   switch (route.name) {
     case 'emitters':

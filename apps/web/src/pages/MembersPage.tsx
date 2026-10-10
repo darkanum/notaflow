@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { api, type Member } from '../api';
 import { Layout, errorText } from '../components/Layout';
+import { roleIn, useMe } from '../components/MeContext';
 import { useAsync } from '../components/useAsync';
 import {
   Alert,
@@ -32,6 +33,16 @@ export function MembersPage({ accountId }: { accountId: string }) {
     } catch (error) {
       setMessage(errorText(error));
     }
+  }
+
+  const me = useMe();
+  const role = roleIn(me, accountId);
+  if (me && role !== 'owner') {
+    return (
+      <Layout title="Membros" accountId={accountId}>
+        <Alert variant="info">Só o dono da conta gerencia os membros.</Alert>
+      </Layout>
+    );
   }
 
   return (
