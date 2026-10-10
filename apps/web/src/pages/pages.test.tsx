@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 import { stubApi } from '../test/stubApi';
@@ -97,4 +97,50 @@ test('a 5xx whose body a proxy replaced still says the ADN is not rendering the 
   const user = userEvent.setup();
   await user.click(await screen.findByRole('button', { name: 'PDF' }));
   expect(await screen.findByText(/não está gerando o PDF/i)).toBeTruthy();
+});
+
+test('a click on the row opens the invoice; the list has no number or environment column', async () => {
+  stubApi({
+    '/api/accounts/acc/invoices': { items: [invoice], total: 1 },
+    '/api/accounts/acc/emitters': [],
+  });
+  render(<InvoicesPage accountId="acc" />);
+  const user = userEvent.setup();
+  const row = (await screen.findByText('Foreign Customer Inc')).closest('tr');
+  expect(screen.queryByRole('columnheader', { name: 'Número' })).toBeNull();
+  expect(screen.queryByRole('columnheader', { name: 'Ambiente' })).toBeNull();
+  await user.click(row as HTMLElement);
+  expect(window.location.hash).toBe('#/a/acc/invoices/inv1');
+});
+
+test('the row opens with Enter, and its buttons do not open it', async () => {
+  vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:x', revokeObjectURL: () => {} }));
+  stubApi({
+    '/api/accounts/acc/invoices/inv1/danfse': { error: 'danfse_unavailable' },
+    '/api/accounts/acc/invoices': { items: [invoice], total: 1 },
+    '/api/accounts/acc/emitters': [],
+  });
+  render(<InvoicesPage accountId="acc" />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: 'PDF' }));
+  expect(window.location.hash).toBe('');
+  const row = screen.getByText('Foreign Customer Inc').closest('tr') as HTMLElement;
+  row.focus();
+  await user.keyboard('{Enter}');
+  expect(window.location.hash).toBe('#/a/acc/invoices/inv1');
+});
+
+test('a produção restrita invoice carries a Teste badge; a production one does not', async () => {
+  stubApi({
+    '/api/accounts/acc/invoices': {
+      items: [invoice, { ...invoice, id: 'inv2', customerName: 'Teste Ltda', environment: 'producao_restrita' }],
+      total: 2,
+    },
+    '/api/accounts/acc/emitters': [],
+  });
+  render(<InvoicesPage accountId="acc" />);
+  const testRow = (await screen.findByText('Teste Ltda')).closest('tr') as HTMLElement;
+  const prodRow = screen.getByText('Foreign Customer Inc').closest('tr') as HTMLElement;
+  expect(within(testRow).getByText('Teste')).toBeTruthy();
+  expect(within(prodRow).queryByText('Teste')).toBeNull();
 });
