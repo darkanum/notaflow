@@ -4,7 +4,7 @@ import { EnvironmentBadge } from '../components/EnvironmentBadge';
 import { Layout, errorText } from '../components/Layout';
 import { useAsync } from '../components/useAsync';
 import { formatCents, formatCompetence } from '../format';
-import { downloadFile } from '../download';
+import { danfseErrorText, downloadFile } from '../download';
 import { routeHref } from '../router';
 import {
   Alert,
@@ -90,7 +90,7 @@ export function InvoicesPage({ accountId }: { accountId: string }) {
     try {
       await downloadFile(`${base}/invoices/${encodeURIComponent(invoiceId)}/danfse`);
     } catch (error) {
-      setPdfError(errorText(error));
+      setPdfError(danfseErrorText(error));
     }
   }
 

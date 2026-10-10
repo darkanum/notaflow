@@ -82,3 +82,19 @@ test('a PDF the ADN cannot render shows why', async () => {
   await user.click(await screen.findByRole('button', { name: 'PDF' }));
   expect(await screen.findByText(/não está gerando o PDF/i)).toBeTruthy();
 });
+
+test('a 5xx whose body a proxy replaced still says the ADN is not rendering the PDF', async () => {
+  vi.stubGlobal(
+    'URL',
+    Object.assign(URL, { createObjectURL: () => 'blob:x', revokeObjectURL: () => {} }),
+  );
+  stubApi({
+    '/api/accounts/acc/invoices/inv1/danfse': { error: 'http_502' },
+    '/api/accounts/acc/invoices': { items: [invoice], total: 1 },
+    '/api/accounts/acc/emitters': [],
+  });
+  render(<InvoicesPage accountId="acc" />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: 'PDF' }));
+  expect(await screen.findByText(/não está gerando o PDF/i)).toBeTruthy();
+});

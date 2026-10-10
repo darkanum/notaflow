@@ -161,7 +161,11 @@ test('another account sees none of the invoices', async () => {
 test('the DANFS-e route downloads the PDF from the ADN in the invoice environment', async () => {
   const { a } = await synced();
   const headers = await t.as('owner@example.com');
-  const list = await t.app.inject({ method: 'GET', url: `/api/accounts/${a.accountId}/invoices`, headers });
+  const list = await t.app.inject({
+    method: 'GET',
+    url: `/api/accounts/${a.accountId}/invoices`,
+    headers,
+  });
   const first = list.json<{ items: { id: string; number: string }[] }>().items[0];
   const response = await t.app.inject({
     method: 'GET',
@@ -170,24 +174,43 @@ test('the DANFS-e route downloads the PDF from the ADN in the invoice environmen
   });
   expect(response.statusCode).toBe(200);
   expect(response.headers['content-type']).toBe('application/pdf');
-  expect(response.headers['content-disposition']).toBe(`attachment; filename="DANFSe-${first?.number ?? ''}.pdf"`);
+  expect(response.headers['content-disposition']).toBe(
+    `attachment; filename="DANFSe-${first?.number ?? ''}.pdf"`,
+  );
   expect(response.rawPayload.subarray(0, 5).toString('latin1')).toBe('%PDF-');
 });
 
-test('when the ADN cannot render the PDF the route answers 502 danfse_unavailable', async () => {
+test('when the ADN cannot render the PDF the route answers 503 danfse_unavailable', async () => {
   const { a } = await synced();
   const headers = await t.as('owner@example.com');
-  const list = await t.app.inject({ method: 'GET', url: `/api/accounts/${a.accountId}/invoices`, headers });
+  const list = await t.app.inject({
+    method: 'GET',
+    url: `/api/accounts/${a.accountId}/invoices`,
+    headers,
+  });
   const id = list.json<{ items: { id: string }[] }>().items[0]?.id ?? '';
-  t.fake.next('danfse', { kind: 'reply', status: 503, body: '<html>503 Service Unavailable</html>' });
-  const response = await t.app.inject({ method: 'GET', url: `/api/accounts/${a.accountId}/invoices/${id}/danfse`, headers });
-  expect(response.statusCode).toBe(502);
+  t.fake.next('danfse', {
+    kind: 'reply',
+    status: 503,
+    body: '<html>503 Service Unavailable</html>',
+  });
+  const response = await t.app.inject({
+    method: 'GET',
+    url: `/api/accounts/${a.accountId}/invoices/${id}/danfse`,
+    headers,
+  });
+  // 503, not 502: the Cloudflare proxy replaces the body of a 502 with its own page.
+  expect(response.statusCode).toBe(503);
   expect(response.json()).toEqual({ error: 'danfse_unavailable' });
 });
 
 test('another account gets 404 on the DANFS-e route', async () => {
   const { a } = await synced();
-  const own = await t.app.inject({ method: 'GET', url: `/api/accounts/${a.accountId}/invoices`, headers: await t.as('owner@example.com') });
+  const own = await t.app.inject({
+    method: 'GET',
+    url: `/api/accounts/${a.accountId}/invoices`,
+    headers: await t.as('owner@example.com'),
+  });
   const id = own.json<{ items: { id: string }[] }>().items[0]?.id ?? '';
   const b = seedTenant(t.db, { accountName: 'B', email: 'b@example.com' });
   const response = await t.app.inject({
