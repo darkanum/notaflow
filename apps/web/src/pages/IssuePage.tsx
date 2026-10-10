@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import {
   ApiError,
   api,
@@ -112,6 +112,7 @@ function IssueFlow(props: {
   );
   const [rate, setRate] = useState<ExchangeRate | null>(null);
   const [rateError, setRateError] = useState<string | null>(null);
+  const [rateLoading, setRateLoading] = useState(false);
   // One key per review: a retry of the same confirmation must not issue twice.
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(pendingSend?.key ?? null);
   // After an answer that does not say whether the invoice exists, only a retry with the same key is safe.
@@ -133,20 +134,44 @@ function IssueFlow(props: {
   const customerName = chosen?.name ?? draft.customer?.name ?? '';
   const production = emitter.environment === 'producao';
 
-  async function fetchRate() {
-    if (!draft.foreign || foreignCents === null) return;
-    setRateError(null);
-    try {
-      const found = await api.get<ExchangeRate>(
-        `${base}/exchange-rate?currency=${draft.foreign.currencyCode}&date=${form.competence}`,
-      );
-      setRate(found);
-      set('brl')(centsInput(Math.round((foreignCents * found.rateE4) / 10_000)));
-    } catch (error) {
-      setRate(null);
-      setRateError(errorText(error));
-    }
-  }
+  // The review shows reviewed values; a rate arriving then must not change them.
+  const reviewing = useRef(idempotencyKey !== null);
+  reviewing.current = idempotencyKey !== null;
+  const currencyCode = draft.foreign?.currencyCode;
+  useEffect(() => {
+    if (!currencyCode || foreignCents === null || foreignCents <= 0 || !form.competence) return;
+    if (reviewing.current) return;
+    let live = true;
+    setRateLoading(true);
+    // Waits for the user to stop typing before asking the Banco Central.
+    const timer = setTimeout(() => {
+      api
+        .get<ExchangeRate>(`${base}/exchange-rate?currency=${currencyCode}&date=${form.competence}`)
+        .then(
+          (found) => {
+            if (!live || reviewing.current) return;
+            setRate(found);
+            setRateError(null);
+            setForm((f) => ({
+              ...f,
+              brl: centsInput(Math.round((foreignCents * found.rateE4) / 10_000)),
+            }));
+          },
+          (error: unknown) => {
+            if (!live) return;
+            setRate(null);
+            setRateError(errorText(error));
+          },
+        )
+        .finally(() => {
+          if (live) setRateLoading(false);
+        });
+    }, 400);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [base, currencyCode, foreignCents, form.competence]);
 
   function review(event: FormEvent) {
     event.preventDefault();
@@ -352,12 +377,8 @@ function IssueFlow(props: {
                 onChange={(e) => set('foreign')(e.target.value)}
               />
             </Field>
-            <div>
-              <Button size="sm" variant="secondary" onClick={() => void fetchRate()}>
-                Buscar cotação PTAX
-              </Button>
-            </div>
-            {rate && (
+            {rateLoading && <p className="text-sm text-muted">Buscando a cotação PTAX…</p>}
+            {!rateLoading && rate && (
               <p className="text-sm text-muted">
                 PTAX venda de {formatDate(`${rate.date}T12:00:00Z`)}: {rate.rate.replace('.', ',')}
               </p>

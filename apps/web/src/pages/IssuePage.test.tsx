@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { ERROR_TEXT } from '../components/Layout';
@@ -46,35 +46,61 @@ const base = {
   '/api/accounts/acc/customers': [],
 };
 
-test('the PTAX button fills the BRL amount from the foreign amount', async () => {
-  const calls = stubApi({
-    ...base,
-    '/api/accounts/acc/exchange-rate': {
-      currency: 'USD',
-      date: '2026-08-31',
-      rate: '5.4321',
-      rateE4: 54321,
-      source: 'PTAX venda, fechamento',
-    },
-  });
+const rate = (date: string, rateE4: number) => ({
+  currency: 'USD',
+  date,
+  rate: (rateE4 / 10_000).toFixed(4),
+  rateE4,
+  source: 'PTAX venda, fechamento',
+});
+
+test('the PTAX rate is fetched when the form opens and fills the BRL amount', async () => {
+  const calls = stubApi({ ...base, '/api/accounts/acc/exchange-rate': rate('2026-08-31', 54321) });
   render(<IssuePage accountId="acc" invoiceId="inv1" />);
-  const user = userEvent.setup();
-  await user.click(await screen.findByRole('button', { name: /cotação ptax/i }));
   expect(await screen.findByDisplayValue('10.864,20')).toBeTruthy();
   expect(screen.getByText(/PTAX venda de 31\/08\/2026: 5,4321/)).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /cotação ptax/i })).toBeNull();
   const competence = (screen.getByLabelText('Competência') as HTMLInputElement).value;
   expect(calls.some((c) => c.url.endsWith(`/exchange-rate?currency=220&date=${competence}`))).toBe(
     true,
   );
 });
 
+test('a new competence date fetches the rate of that date', async () => {
+  stubApi({
+    ...base,
+    '/api/accounts/acc/exchange-rate': rate('2026-08-31', 54321),
+    '/api/accounts/acc/exchange-rate?currency=220&date=2026-07-31': rate('2026-07-31', 50000),
+  });
+  render(<IssuePage accountId="acc" invoiceId="inv1" />);
+  await screen.findByDisplayValue('10.864,20');
+  fireEvent.change(screen.getByLabelText('Competência'), { target: { value: '2026-07-31' } });
+  expect(await screen.findByDisplayValue('10.000,00')).toBeTruthy();
+  expect(screen.getByText(/PTAX venda de 31\/07\/2026: 5,0000/)).toBeTruthy();
+});
+
+test('a new foreign amount refreshes the BRL amount, and a typed BRL amount stays until then', async () => {
+  stubApi({ ...base, '/api/accounts/acc/exchange-rate': rate('2026-08-31', 54321) });
+  render(<IssuePage accountId="acc" invoiceId="inv1" />);
+  const user = userEvent.setup();
+  const brl = (await screen.findByDisplayValue('10.864,20')) as HTMLInputElement;
+  await user.clear(brl);
+  await user.type(brl, '9.999,99');
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  expect(brl.value).toBe('9.999,99');
+  const foreign = screen.getByLabelText('Valor em USD');
+  await user.clear(foreign);
+  await user.type(foreign, '1.000,00');
+  await waitFor(() => expect(brl.value).toBe('5.432,10'));
+});
+
 test('a PTAX failure keeps the BRL amount editable and says so', async () => {
   stubApi({ ...base, '/api/accounts/acc/exchange-rate': { error: 'ptax_unavailable' } });
   render(<IssuePage accountId="acc" invoiceId="inv1" />);
-  const user = userEvent.setup();
-  await user.click(await screen.findByRole('button', { name: /cotação ptax/i }));
   expect(await screen.findByText(ERROR_TEXT.ptax_unavailable ?? '')).toBeTruthy();
-  expect((screen.getByLabelText(/valor em reais/i) as HTMLInputElement).disabled).toBe(false);
+  const brl = screen.getByLabelText(/valor em reais/i) as HTMLInputElement;
+  expect(brl.disabled).toBe(false);
+  expect(brl.value).toBe('5.000,00');
 });
 
 test('the review shows PRODUÇÃO, highlights changes, and sends one key on a retry', async () => {
