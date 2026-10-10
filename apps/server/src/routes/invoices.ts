@@ -89,6 +89,33 @@ export function invoiceRoutes(
     },
   );
 
+  app.get<{ Params: { accountId: string; invoiceId: string } }>(
+    '/api/accounts/:accountId/invoices/:invoiceId/danfse',
+    async (request, reply) => {
+      const ctx = accountContext(request, request.params.accountId);
+      const invoice = invoices.get(ctx, request.params.invoiceId);
+      if (!invoice?.accessKey) throw new HttpError(404, 'not_found');
+      const certificate = await certificates.loadActive(ctx, invoice.emitterId);
+      if (!certificate) throw new HttpError(409, 'no_active_certificate');
+      let pdf: Uint8Array | null;
+      try {
+        // The invoice's own environment: produção restrita invoices live in another ADN.
+        pdf = await deps
+          .providerFactory({ environment: invoice.environment, certificate })
+          .getDanfse(invoice.accessKey);
+      } catch (error) {
+        request.log.warn({ err: error, accessKey: invoice.accessKey }, 'DANFS-e not available');
+        throw new HttpError(502, 'danfse_unavailable');
+      }
+      if (!pdf) throw new HttpError(404, 'invoice_not_found');
+      const name = (invoice.number ?? invoice.id).replace(/[^0-9A-Za-z-]/g, '');
+      return reply
+        .header('content-type', 'application/pdf')
+        .header('content-disposition', `attachment; filename="DANFSe-${name}.pdf"`)
+        .send(Buffer.from(pdf));
+    },
+  );
+
   app.post<{ Params: { accountId: string }; Body: { accessKey: string } }>(
     '/api/accounts/:accountId/invoices/lookup',
     {

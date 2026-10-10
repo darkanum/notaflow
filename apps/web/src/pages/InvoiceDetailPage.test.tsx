@@ -115,3 +115,25 @@ test('an unknown invoice offers Verificar na Sefin and lists the Sefin messages'
   await user.click(screen.getByRole('button', { name: 'Verificar na Sefin' }));
   await waitFor(() => expect(calls.some((c) => c.url.endsWith('/reconcile'))).toBe(true));
 });
+
+test('the detail downloads the DANFS-e PDF', async () => {
+  const created: Blob[] = [];
+  vi.stubGlobal(
+    'URL',
+    Object.assign(URL, {
+      createObjectURL: (blob: Blob) => {
+        created.push(blob);
+        return 'blob:x';
+      },
+      revokeObjectURL: () => {},
+    }),
+  );
+  stubApi({
+    '/api/accounts/acc/invoices/inv1/danfse': 'PDF',
+    '/api/accounts/acc/invoices/inv1': issuedInvoice,
+  });
+  render(<InvoiceDetailPage accountId="acc" invoiceId="inv1" />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: /baixar pdf/i }));
+  await waitFor(() => expect(created).toHaveLength(1));
+});

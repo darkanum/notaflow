@@ -26,6 +26,10 @@ export class NacionalProvider implements InvoiceProvider {
     };
   }
 
+  getDanfse(accessKey: string): Promise<Uint8Array | null> {
+    return this.client.getDanfse(accessKey);
+  }
+
   async getInvoice(accessKey: string): Promise<ProviderInvoice | null> {
     try {
       return parseNfseXml(await this.client.getNfse(accessKey));
