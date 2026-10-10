@@ -1,6 +1,5 @@
 import { type FormEvent, useState } from 'react';
 import { api, type Emitter, type InvoicePage, type InvoiceSummary } from '../api';
-import { EnvironmentBadge } from '../components/EnvironmentBadge';
 import { Layout, errorText } from '../components/Layout';
 import { useAsync } from '../components/useAsync';
 import { formatCents, formatCompetence } from '../format';
@@ -16,7 +15,6 @@ import {
   Card,
   Field,
   Input,
-  Link,
   Select,
   Table,
   TBody,
@@ -166,59 +164,75 @@ export function InvoicesPage({ accountId }: { accountId: string }) {
           <Table>
             <THead>
               <tr>
-                <TH>Número</TH>
                 <TH>Competência</TH>
                 <TH>Tomador</TH>
                 <TH>Valor</TH>
                 <TH>Situação</TH>
-                <TH>Ambiente</TH>
                 <TH>Ações</TH>
               </tr>
             </THead>
             <TBody>
-              {page.data.items.map((invoice) => (
-                <tr key={invoice.id}>
-                  <TD>
-                    <Link href={routeHref({ name: 'invoice', accountId, invoiceId: invoice.id })}>
-                      {invoice.number ?? '-'}
-                    </Link>
-                  </TD>
-                  <TD>{formatCompetence(invoice.competence)}</TD>
-                  <TD>{invoice.customerName}</TD>
-                  <TD className="whitespace-nowrap">{formatCents(invoice.serviceCents)}</TD>
-                  <TD>
-                    <Badge variant={STATUS_VARIANT[invoice.status]}>
-                      {STATUS_TEXT[invoice.status]}
-                    </Badge>
-                  </TD>
-                  <TD>
-                    {invoice.environment === 'producao' ? (
-                      'Produção'
-                    ) : (
-                      <EnvironmentBadge environment={invoice.environment} />
-                    )}
-                  </TD>
-                  <TD className="whitespace-nowrap">
-                    {(invoice.status === 'issued' || invoice.status === 'cancelled') && (
-                      <div className="flex items-center gap-2">
-                        <a
-                          href={routeHref({ name: 'issue', accountId, invoiceId: invoice.id })}
-                          className={buttonClasses({ variant: 'secondary', size: 'sm' })}
-                        >
-                          Emitir parecida
-                        </a>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => void downloadPdf(invoice.id)}
-                        >
-                          PDF
-                        </Button>
+              {page.data.items.map((invoice) => {
+                const open = () => {
+                  window.location.hash = routeHref({
+                    name: 'invoice',
+                    accountId,
+                    invoiceId: invoice.id,
+                  });
+                };
+                return (
+                  <tr
+                    key={invoice.id}
+                    tabIndex={0}
+                    aria-label={`Abrir a NFS-e ${invoice.number ?? ''} de ${invoice.customerName ?? ''}`}
+                    className="cursor-pointer hover:bg-muted/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    onClick={open}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && event.target === event.currentTarget) open();
+                    }}
+                  >
+                    <TD>{formatCompetence(invoice.competence)}</TD>
+                    <TD>{invoice.customerName}</TD>
+                    <TD className="whitespace-nowrap">{formatCents(invoice.serviceCents)}</TD>
+                    <TD>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Badge variant={STATUS_VARIANT[invoice.status]}>
+                          {STATUS_TEXT[invoice.status]}
+                        </Badge>
+                        {invoice.environment === 'producao_restrita' && (
+                          <Badge variant="warning" outline>
+                            Teste
+                          </Badge>
+                        )}
                       </div>
-                    )}
-                  </TD>
-                </tr>
-              ))}
+                    </TD>
+                    <TD className="whitespace-nowrap">
+                      {(invoice.status === 'issued' || invoice.status === 'cancelled') && (
+                        // The actions act on their own; a click on them must not open the invoice.
+                        <div
+                          className="flex items-center gap-2"
+                          onClick={(event) => event.stopPropagation()}
+                          onKeyDown={(event) => event.stopPropagation()}
+                        >
+                          <a
+                            href={routeHref({ name: 'issue', accountId, invoiceId: invoice.id })}
+                            className={buttonClasses({ variant: 'secondary', size: 'sm' })}
+                          >
+                            Emitir parecida
+                          </a>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => void downloadPdf(invoice.id)}
+                          >
+                            PDF
+                          </Button>
+                        </div>
+                      )}
+                    </TD>
+                  </tr>
+                );
+              })}
             </TBody>
           </Table>
           <div className="flex flex-wrap items-center gap-3 text-sm text-muted">
