@@ -61,7 +61,12 @@ test('issue similar: pending, then issued with a new DPS number and the new amou
 
 test('two issues at the same time get two different DPS numbers', async () => {
   const { a, headers, templateInvoiceId } = await withTemplate(t);
-  const payload = { templateInvoiceId, competence: '2026-09-30', serviceCents: 100, foreignAmountCents: 20 };
+  const payload = {
+    templateInvoiceId,
+    competence: '2026-09-30',
+    serviceCents: 100,
+    foreignAmountCents: 20,
+  };
   const url = `/api/accounts/${a.accountId}/invoices/issue`;
   const [one, two] = await Promise.all([
     t.app.inject({ method: 'POST', url, headers, payload }),
@@ -78,17 +83,31 @@ test('a zero amount and a future competence are refused before anything is reser
     method: 'POST',
     url,
     headers,
-    payload: { templateInvoiceId, competence: '2026-09-30', serviceCents: 0, foreignAmountCents: 1 },
+    payload: {
+      templateInvoiceId,
+      competence: '2026-09-30',
+      serviceCents: 0,
+      foreignAmountCents: 1,
+    },
   });
   expect(zero.json()).toEqual({ error: 'invalid_amount' });
   const future = await t.app.inject({
     method: 'POST',
     url,
     headers,
-    payload: { templateInvoiceId, competence: '2999-01-31', serviceCents: 1, foreignAmountCents: 1 },
+    payload: {
+      templateInvoiceId,
+      competence: '2999-01-31',
+      serviceCents: 1,
+      foreignAmountCents: 1,
+    },
   });
   expect(future.json()).toEqual({ error: 'competence_after_issue' });
-  const list = await t.app.inject({ method: 'GET', url: `/api/accounts/${a.accountId}/invoices`, headers });
+  const list = await t.app.inject({
+    method: 'GET',
+    url: `/api/accounts/${a.accountId}/invoices`,
+    headers,
+  });
   expect(list.json()).toMatchObject({ total: 1 });
 });
 
@@ -103,8 +122,14 @@ test('a template with a field the app cannot copy is 422 with the paths, and not
     specialRegime: '0',
     dpsSeries: '900',
   });
-  const xml = '<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse"><infNFSe><DPS><infDPS><BM><tpBM>1</tpBM></BM></infDPS></DPS></infNFSe></NFSe>';
-  const { id } = new InvoiceRepository(t.db).upsertSynced(a, emitter.id, providerInvoice({ xml }), null);
+  const xml =
+    '<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse"><infNFSe><DPS><infDPS><BM><tpBM>1</tpBM></BM></infDPS></DPS></infNFSe></NFSe>';
+  const { id } = new InvoiceRepository(t.db).upsertSynced(
+    a,
+    emitter.id,
+    providerInvoice({ xml }),
+    null,
+  );
   const response = await t.app.inject({
     method: 'POST',
     url: `/api/accounts/${a.accountId}/invoices/issue`,
@@ -124,7 +149,12 @@ test('a DPS number used outside the app is never taken as the new invoice', asyn
     method: 'POST',
     url: `/api/accounts/${a.accountId}/invoices/issue`,
     headers,
-    payload: { templateInvoiceId, competence: '2026-09-30', serviceCents: 670321, foreignAmountCents: 123400 },
+    payload: {
+      templateInvoiceId,
+      competence: '2026-09-30',
+      serviceCents: 670321,
+      foreignAmountCents: 123400,
+    },
   });
   expect(response.json()).toMatchObject({ status: 'rejected', errors: [{ code: 'E0014' }] });
 });
@@ -135,7 +165,9 @@ test('the exchange rate route returns the PTAX sell closing rate', async () => {
   ptax
     .get('https://olinda.bcb.gov.br')
     .intercept({ path: (p) => p.includes('08-31-2026'), method: 'GET' })
-    .reply(200, { value: [{ tipoBoletim: 'Fechamento PTAX', cotacaoVenda: 5.4321, cotacaoCompra: 5.181 }] });
+    .reply(200, {
+      value: [{ tipoBoletim: 'Fechamento PTAX', cotacaoVenda: 5.4321, cotacaoCompra: 5.181 }],
+    });
   const own = await createTestApp({ ptaxDispatcher: ptax });
   const a = seedTenant(own.db, { accountName: 'A', email: 'x@example.com' });
   const response = await own.app.inject({
@@ -165,7 +197,12 @@ test('a DPS number used outside the app for the same amount but another customer
     method: 'POST',
     url: `/api/accounts/${a.accountId}/invoices/issue`,
     headers,
-    payload: { templateInvoiceId, competence: '2026-09-30', serviceCents: 670321, foreignAmountCents: 200000 },
+    payload: {
+      templateInvoiceId,
+      competence: '2026-09-30',
+      serviceCents: 670321,
+      foreignAmountCents: 200000,
+    },
   });
   expect(response.json()).toMatchObject({ status: 'rejected', errors: [{ code: 'E0014' }] });
 });
@@ -193,14 +230,23 @@ test('the same Idempotency-Key twice issues once and answers the same invoice', 
     method: 'POST' as const,
     url: `/api/accounts/${a.accountId}/invoices/issue`,
     headers: { ...headers, 'idempotency-key': 'form-0001-abcdef' },
-    payload: { templateInvoiceId, competence: '2026-09-30', serviceCents: 670321, foreignAmountCents: 123400 },
+    payload: {
+      templateInvoiceId,
+      competence: '2026-09-30',
+      serviceCents: 670321,
+      foreignAmountCents: 123400,
+    },
   };
   const first = await t.app.inject(request);
   const second = await t.app.inject(request);
   expect(first.statusCode).toBe(201);
   expect(second.statusCode).toBe(200);
   expect(second.json()).toEqual(first.json());
-  const list = await t.app.inject({ method: 'GET', url: `/api/accounts/${a.accountId}/invoices`, headers });
+  const list = await t.app.inject({
+    method: 'GET',
+    url: `/api/accounts/${a.accountId}/invoices`,
+    headers,
+  });
   expect(list.json()).toMatchObject({ total: 2 });
 });
 
@@ -210,11 +256,20 @@ test('two requests with one key at the same time make one invoice', async () => 
     method: 'POST' as const,
     url: `/api/accounts/${a.accountId}/invoices/issue`,
     headers: { ...headers, 'idempotency-key': 'form-0002-abcdef' },
-    payload: { templateInvoiceId, competence: '2026-09-30', serviceCents: 100, foreignAmountCents: 20 },
+    payload: {
+      templateInvoiceId,
+      competence: '2026-09-30',
+      serviceCents: 100,
+      foreignAmountCents: 20,
+    },
   };
   const [one, two] = await Promise.all([t.app.inject(request), t.app.inject(request)]);
   expect(one.json().id).toBe(two.json().id);
-  const list = await t.app.inject({ method: 'GET', url: `/api/accounts/${a.accountId}/invoices`, headers });
+  const list = await t.app.inject({
+    method: 'GET',
+    url: `/api/accounts/${a.accountId}/invoices`,
+    headers,
+  });
   expect(list.json()).toMatchObject({ total: 2 });
 });
 
@@ -224,7 +279,12 @@ test('a malformed Idempotency-Key is 400', async () => {
     method: 'POST',
     url: `/api/accounts/${a.accountId}/invoices/issue`,
     headers: { ...headers, 'idempotency-key': 'x' },
-    payload: { templateInvoiceId, competence: '2026-09-30', serviceCents: 100, foreignAmountCents: 20 },
+    payload: {
+      templateInvoiceId,
+      competence: '2026-09-30',
+      serviceCents: 100,
+      foreignAmountCents: 20,
+    },
   });
   expect(response.json()).toEqual({ error: 'invalid_idempotency_key' });
 });

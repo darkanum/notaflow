@@ -7,7 +7,8 @@ const ERROR_STATUS: Record<string, number> = {
   sefin_unavailable: 502,
   sefin_rejected: 422,
   invalid_amount: 400,
-  danfse_unavailable: 502,
+  danfse_unavailable: 503,
+  http_502: 502,
   http_524: 524,
 };
 

@@ -105,7 +105,8 @@ export function invoiceRoutes(
           .getDanfse(invoice.accessKey);
       } catch (error) {
         request.log.warn({ err: error, accessKey: invoice.accessKey }, 'DANFS-e not available');
-        throw new HttpError(502, 'danfse_unavailable');
+        // 503, not 502: the Cloudflare proxy replaces the body of a 502 with its own page.
+        throw new HttpError(503, 'danfse_unavailable');
       }
       if (!pdf) throw new HttpError(404, 'invoice_not_found');
       const name = (invoice.number ?? invoice.id).replace(/[^0-9A-Za-z-]/g, '');
