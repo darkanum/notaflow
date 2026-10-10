@@ -8,7 +8,7 @@ import {
 } from '@notaflow/provider-nacional';
 import { buildAccessKey, buildEventXml, buildNfseXml, readDps } from './fakeXml';
 
-export type FakeRoute = 'issue' | 'getNfse' | 'getDps' | 'event' | 'dfe' | 'convenio';
+export type FakeRoute = 'issue' | 'getNfse' | 'getDps' | 'event' | 'dfe' | 'convenio' | 'danfse';
 export type FakeOutcome =
   { kind: 'reply'; status: number; body: unknown } | { kind: 'delay'; ms: number };
 
@@ -40,6 +40,8 @@ export interface FakeDfeEntry {
 interface Reply {
   status: number;
   body: unknown;
+  // A non-JSON answer, such as the DANFS-e PDF.
+  raw?: { contentType: string; bytes: Buffer };
 }
 
 type Handler = (match: RegExpMatchArray, body: string, url: URL) => Reply;
@@ -86,6 +88,7 @@ export async function startFakeNacional(
       handle: event,
     },
     { route: 'dfe', method: 'GET', pattern: /^\/adn\/contribuintes\/DFe\/([0-9]+)$/, handle: dfe },
+    { route: 'danfse', method: 'GET', pattern: /^\/adn\/danfse\/([0-9A-Z]{50})$/, handle: danfse },
     {
       route: 'convenio',
       method: 'GET',
@@ -140,6 +143,20 @@ export async function startFakeNacional(
     return {
       status: 200,
       body: { chaveAcesso: invoice.accessKey, nfseXmlGZipB64: gzipBase64(invoice.nfseXml) },
+    };
+  }
+
+  function danfse(match: RegExpMatchArray): Reply {
+    const accessKey = match[1] ?? '';
+    if (!state.invoices.get(accessKey)) return { status: 404, body: null };
+    const pdf = `%PDF-1.4
+% NotaFlow fake DANFS-e ${accessKey}
+%%EOF
+`;
+    return {
+      status: 200,
+      body: null,
+      raw: { contentType: 'application/pdf', bytes: Buffer.from(pdf, 'latin1') },
     };
   }
 
@@ -295,6 +312,11 @@ function readBody(request: IncomingMessage): Promise<string> {
 function send(response: ServerResponse, reply: Reply): void {
   // The client may have given up already (a delay scenario); writing then is harmless.
   if (response.writableEnded || response.destroyed) return;
+  if (reply.raw) {
+    response.writeHead(reply.status, { 'content-type': reply.raw.contentType });
+    response.end(reply.raw.bytes);
+    return;
+  }
   response.writeHead(reply.status, { 'content-type': 'application/json; charset=utf-8' });
   response.end(reply.body === null ? '' : JSON.stringify(reply.body));
 }

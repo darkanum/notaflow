@@ -4,12 +4,14 @@ import { EnvironmentBadge } from '../components/EnvironmentBadge';
 import { Layout, errorText } from '../components/Layout';
 import { useAsync } from '../components/useAsync';
 import { formatCents, formatCompetence } from '../format';
+import { downloadFile } from '../download';
 import { routeHref } from '../router';
 import {
   Alert,
   Badge,
   type BadgeVariant,
   Button,
+  buttonClasses,
   CARD_CLASSES,
   Card,
   Field,
@@ -61,6 +63,7 @@ export function InvoicesPage({ accountId }: { accountId: string }) {
   const [offset, setOffset] = useState(0);
   const [accessKey, setAccessKey] = useState('');
   const [lookupError, setLookupError] = useState<string | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const emitters = useAsync(() => api.get<Emitter[]>(`${base}/emitters`), [base]);
   const query = new URLSearchParams(
     Object.entries({ ...filters, limit: String(PAGE), offset: String(offset) }).filter(
@@ -79,6 +82,15 @@ export function InvoicesPage({ accountId }: { accountId: string }) {
       window.location.hash = routeHref({ name: 'invoice', accountId, invoiceId: id });
     } catch (error) {
       setLookupError(errorText(error));
+    }
+  }
+
+  async function downloadPdf(invoiceId: string) {
+    setPdfError(null);
+    try {
+      await downloadFile(`${base}/invoices/${encodeURIComponent(invoiceId)}/danfse`);
+    } catch (error) {
+      setPdfError(errorText(error));
     }
   }
 
@@ -148,6 +160,7 @@ export function InvoicesPage({ accountId }: { accountId: string }) {
         />
       </Card>
       {page.error && <Alert variant="error">{errorText(page.error)}</Alert>}
+      {pdfError && <Alert variant="warning">{pdfError}</Alert>}
       {page.data && (
         <>
           <Table>
@@ -159,6 +172,7 @@ export function InvoicesPage({ accountId }: { accountId: string }) {
                 <TH>Valor</TH>
                 <TH>Situação</TH>
                 <TH>Ambiente</TH>
+                <TH>Ações</TH>
               </tr>
             </THead>
             <TBody>
@@ -182,6 +196,25 @@ export function InvoicesPage({ accountId }: { accountId: string }) {
                       'Produção'
                     ) : (
                       <EnvironmentBadge environment={invoice.environment} />
+                    )}
+                  </TD>
+                  <TD className="whitespace-nowrap">
+                    {(invoice.status === 'issued' || invoice.status === 'cancelled') && (
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={routeHref({ name: 'issue', accountId, invoiceId: invoice.id })}
+                          className={buttonClasses({ variant: 'secondary', size: 'sm' })}
+                        >
+                          Emitir parecida
+                        </a>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => void downloadPdf(invoice.id)}
+                        >
+                          PDF
+                        </Button>
+                      </div>
                     )}
                   </TD>
                 </tr>

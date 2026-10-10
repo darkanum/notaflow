@@ -2,6 +2,7 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
+import { stubApi } from '../test/stubApi';
 import { InvoicesPage } from './InvoicesPage';
 
 afterEach(() => {
@@ -9,23 +10,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
   window.location.hash = '';
 });
-
-function stubApi(routes: Record<string, unknown>) {
-  const calls: { url: string; init?: RequestInit }[] = [];
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string, init?: RequestInit) => {
-      calls.push({ url, ...(init ? { init } : {}) });
-      const key = Object.keys(routes).find((prefix) => url.startsWith(prefix));
-      const body = key ? routes[key] : { error: 'not_found' };
-      return new Response(JSON.stringify(body), {
-        status: key ? 200 : 404,
-        headers: { 'content-type': 'application/json' },
-      });
-    }),
-  );
-  return calls;
-}
 
 const invoice = {
   id: 'inv1',
@@ -70,4 +54,31 @@ test('the lookup posts the key and opens the found invoice', async () => {
   expect(calls.find((c) => c.url.endsWith('/lookup'))?.init?.body).toBe(
     JSON.stringify({ accessKey: 'K'.repeat(50) }),
   );
+});
+
+test('each issued or cancelled invoice has Emitir parecida and PDF in the list', async () => {
+  stubApi({
+    '/api/accounts/acc/invoices': { items: [invoice], total: 1 },
+    '/api/accounts/acc/emitters': [],
+  });
+  render(<InvoicesPage accountId="acc" />);
+  const link = await screen.findByRole('link', { name: 'Emitir parecida' });
+  expect(link.getAttribute('href')).toBe('#/a/acc/invoices/inv1/issue');
+  expect(screen.getByRole('button', { name: 'PDF' })).toBeTruthy();
+});
+
+test('a PDF the ADN cannot render shows why', async () => {
+  vi.stubGlobal(
+    'URL',
+    Object.assign(URL, { createObjectURL: () => 'blob:x', revokeObjectURL: () => {} }),
+  );
+  stubApi({
+    '/api/accounts/acc/invoices/inv1/danfse': { error: 'danfse_unavailable' },
+    '/api/accounts/acc/invoices': { items: [invoice], total: 1 },
+    '/api/accounts/acc/emitters': [],
+  });
+  render(<InvoicesPage accountId="acc" />);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: 'PDF' }));
+  expect(await screen.findByText(/não está gerando o PDF/i)).toBeTruthy();
 });

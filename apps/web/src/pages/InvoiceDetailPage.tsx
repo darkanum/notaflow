@@ -4,6 +4,7 @@ import { EnvironmentBadge } from '../components/EnvironmentBadge';
 import { Layout, errorText } from '../components/Layout';
 import { useAsync } from '../components/useAsync';
 import { formatCents, formatCompetence, formatDate } from '../format';
+import { downloadFile } from '../download';
 import { routeHref } from '../router';
 import {
   Alert,
@@ -32,6 +33,15 @@ export function InvoiceDetailPage(props: { accountId: string; invoiceId: string 
   const [cancelling, setCancelling] = useState(false);
   const [message, setMessage] = useState<{ variant: 'info' | 'error'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+
+  async function downloadPdf() {
+    setMessage(null);
+    try {
+      await downloadFile(`${url}/danfse`);
+    } catch (error) {
+      setMessage({ variant: 'error', text: errorText(error) });
+    }
+  }
 
   async function verify() {
     setBusy(true);
@@ -134,9 +144,14 @@ export function InvoiceDetailPage(props: { accountId: string; invoiceId: string 
           <dd>{formatCents(data.netCents)}</dd>
         </dl>
       </Card>
-      <p>
+      <div className="flex flex-wrap items-center gap-4">
         <Link href={`${url}/xml`}>Baixar XML</Link>
-      </p>
+        {data.accessKey && (
+          <Button size="sm" variant="secondary" onClick={() => void downloadPdf()}>
+            Baixar PDF (DANFS-e)
+          </Button>
+        )}
+      </div>
       {data.events.length > 0 && (
         <Card>
           <h2 className={SECTION_TITLE_CLASSES}>Eventos</h2>

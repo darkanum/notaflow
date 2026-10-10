@@ -40,6 +40,7 @@ export const ERROR_TEXT: Record<string, string> = {
   invalid_justification: 'A justificativa precisa ter de 15 a 255 caracteres.',
   invalid_address: 'Endereço incompleto.',
   invalid_idempotency_key: 'Erro interno do formulário. Recarregue a página.',
+  danfse_unavailable: 'O ADN não está gerando o PDF agora. Tente de novo em alguns minutos.',
 };
 
 export function errorText(error: unknown): string {
