@@ -380,6 +380,10 @@ Stage 1b is accepted in produção restrita, on the owner's machine, with the re
 - A second cancel of the same invoice was refused with HTTP 400 and `E0840` ("o evento de Cancelamento de NFS-e já está vinculado à NFS-e"). The code is the one the app already treats as "already cancelled". The body carries `erro` as an **array**, a shape the client did not read; the client now reads it (test first).
 - Counts: 1 invoice issued, 1 cancelled, none left active. The emitter went back to production afterwards, and its production invoices were not touched.
 
+### Stage 1c acceptance (2026-10-10)
+
+NotaFlow runs at `https://notaflow.vapulab.com` on the Vapulab VPS, deployed by GitHub Actions on every merge to `production` (see [Deploy on the Vapulab VPS](../../../TUTORIALS/DEPLOY_ON_VM.md)). Cloudflare Access protects it with a one-time PIN by email; the Access policy must be a reusable policy, because an inline one denied every login. With the real certificate, the owner logged in, created the Vapulab account, onboarded the emitter (connection test in produção restrita), switched it to production, and synced: the 3 production invoices are listed as issued, and the 4 produção restrita test invoices as cancelled. The first real invoice to CoGrader is the owner's call.
+
 ## Open Questions
 
 - [ ] Can a rejected DPS number be reused, or is it consumed? Still no evidence: the spike's invalid DPS (zero amount) was issued. Until it is answered, the app never reuses a number; a rejected row keeps its number, and the next issue takes a new one.
