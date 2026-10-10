@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { ApiError } from '../api';
 import { routeHref, useRoute } from '../router';
 import { roleIn, useMe } from './MeContext';
-import { linkClasses } from '../ui';
+import { Avatar, initialsOf, linkClasses, ThemeToggle } from '../ui';
 
 export const ERROR_TEXT: Record<string, string> = {
   access_not_granted: 'Seu e-mail ainda não tem acesso ao NotaFlow. Fale com o administrador.',
@@ -92,13 +92,17 @@ export function Layout(props: { title: string; accountId?: string; children: Rea
               })}
             </ul>
           )}
-          {/* Cloudflare Access serves this path on the app's own domain and ends its session. */}
-          <a
-            href="/cdn-cgi/access/logout"
-            className={`ml-auto text-sm ${linkClasses({ variant: 'muted' })}`}
-          >
-            Sair
-          </a>
+          <div className="ml-auto flex items-center gap-3">
+            <ThemeToggle />
+            {me && <Avatar initials={initialsOf(me.name)} label={`${me.name} (${me.email})`} />}
+            {/* Cloudflare Access serves this path on the app's own domain and ends its session. */}
+            <a
+              href="/cdn-cgi/access/logout"
+              className={`text-sm ${linkClasses({ variant: 'muted' })}`}
+            >
+              Sair
+            </a>
+          </div>
         </nav>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-8">

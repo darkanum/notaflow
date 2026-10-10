@@ -9,7 +9,6 @@ const FILES = [
     'apps/web/public/malphas-assets/fonts/SpaceGrotesk.woff2',
     'malphas/assets/fonts/SpaceGrotesk.woff2',
   ],
-  ['apps/web/public/malphas-assets/favicon.svg', 'malphas/assets/favicon.svg'],
 ];
 
 export function compareCopies(pairs) {
