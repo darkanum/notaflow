@@ -2,6 +2,8 @@
 
 NotaFlow runs at `https://notaflow.vapulab.com` on the Vapulab VPS at Hostinger (`ssh vapulab`, Ubuntu 24.04, Docker). A merge to `production` deploys it: CI passes, the `Deploy` workflow builds the image, pushes it to GHCR, and starts it on the VPS over SSH. This page is how to run, check, roll back, and restore it.
 
+Deploys run one at a time, and only the commit at the tip of `production` goes live: when two merges come close together and the older one's CI finishes last, its deploy is skipped with a notice, because the newer run deploys the newer commit.
+
 ## Layout on the VPS
 
 | Path | What |
